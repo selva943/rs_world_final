@@ -1,0 +1,628 @@
+import { Product, RentalTool, Enquiry, Offer, OfferProduct, OfferCategory, OfferCombo } from '../types';
+import { supabase } from '../../lib/supabase';
+
+// Helper function to convert database row to Product type
+function dbToProduct(row: any): Product {
+  return {
+    id: row.id,
+    name: row.name,
+    brand: row.brand,
+    category: row.category,
+    price: row.price,
+    wholesalePrice: row.wholesale_price,
+    image: row.image_url, // Map image_url to image
+    stock: row.stock,
+    inStock: row.stock > 0, // Derive inStock from stock
+    description: row.description,
+  };
+}
+
+// Helper function to convert Product type to database row
+function productToDb(product: Partial<Product>): any {
+  const dbRow: any = {};
+
+  if (product.name !== undefined) {
+    dbRow.name = product.name;
+    // Generate slug from name
+    dbRow.slug = product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  if (product.brand !== undefined) dbRow.brand = product.brand;
+  if (product.category !== undefined) dbRow.category = product.category;
+  if (product.price !== undefined) dbRow.price = product.price;
+  if (product.wholesalePrice !== undefined) dbRow.wholesale_price = product.wholesalePrice;
+  if (product.image !== undefined) dbRow.image_url = product.image; // Map image to image_url
+  if (product.stock !== undefined) dbRow.stock = product.stock;
+  if (product.description !== undefined) dbRow.description = product.description;
+
+  return dbRow;
+}
+
+// Helper function to convert database row to RentalTool type
+function dbToRental(row: any): RentalTool {
+  return {
+    id: row.id,
+    name: row.name,
+    brand: row.brand || 'INGCO', // Handle missing brand
+    image: row.image_url, // Map image_url to image
+    rentPerDay: row.rent_per_day,
+    rentPerHour: row.rent_per_hour, // Now included in schema
+    deposit: row.deposit,
+    available: row.available, // Now boolean in schema
+    description: row.description,
+  };
+}
+
+// Helper function to convert RentalTool type to database row
+function rentalToDb(rental: Partial<RentalTool>): any {
+  const dbRow: any = {};
+
+  if (rental.name !== undefined) dbRow.name = rental.name;
+  if (rental.brand !== undefined) dbRow.brand = rental.brand;
+  if (rental.image !== undefined) dbRow.image_url = rental.image; // Map image to image_url
+  if (rental.rentPerDay !== undefined) dbRow.rent_per_day = rental.rentPerDay;
+  if (rental.rentPerHour !== undefined) dbRow.rent_per_hour = rental.rentPerHour; // Now included
+  if (rental.deposit !== undefined) dbRow.deposit = rental.deposit;
+  if (rental.available !== undefined) {
+    dbRow.available = rental.available; // Now boolean in schema
+  }
+  if (rental.description !== undefined) dbRow.description = rental.description;
+
+  return dbRow;
+}
+
+// ========== PRODUCTS API ==========
+
+export const productsApi = {
+  async getAll(): Promise<Product[]> {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching products:', error);
+        return [];
+      }
+
+      return (data || []).map(dbToProduct);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      return [];
+    }
+  },
+
+  async add(product: Omit<Product, 'id'>): Promise<Product | null> {
+    try {
+      console.log('Adding product:', product);
+      const productData = productToDb(product);
+      console.log('Converted to DB format:', productData);
+
+      const { data, error } = await supabase
+        .from('products')
+        .insert(productData as any)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding product:', error);
+        console.error('Error details:', error.details, error.hint, error.code);
+        return null;
+      }
+
+      console.log('Product added successfully:', data);
+      return dbToProduct(data as any);
+    } catch (error) {
+      console.error('Error adding product:', error);
+      return null;
+    }
+  },
+
+  async update(id: string, product: Product): Promise<boolean> {
+    try {
+      const productData = productToDb(product);
+      delete productData.id; // Don't update the ID
+
+      const { error } = await supabase
+        .from('products')
+        .update(productData)
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error updating product:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error updating product:', error);
+      return false;
+    }
+  },
+
+  async delete(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting product:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      return false;
+    }
+  },
+};
+
+// ========== RENTALS API ==========
+
+export const rentalsApi = {
+  async getAll(): Promise<RentalTool[]> {
+    try {
+      const { data, error } = await supabase
+        .from('rental_tools')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching rentals:', error);
+        return [];
+      }
+
+      return (data || []).map(dbToRental);
+    } catch (error) {
+      console.error('Error fetching rentals:', error);
+      return [];
+    }
+  },
+
+  async add(rental: Omit<RentalTool, 'id'>): Promise<RentalTool | null> {
+    try {
+      console.log('Adding rental tool:', rental);
+      const rentalData = rentalToDb(rental);
+      console.log('Converted to DB format:', rentalData);
+
+      const { data, error } = await supabase
+        .from('rental_tools')
+        .insert(rentalData as any)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding rental:', error);
+        console.error('Error details:', error.details, error.hint, error.code);
+        return null;
+      }
+
+      console.log('Rental tool added successfully:', data);
+      return dbToRental(data as any);
+    } catch (error) {
+      console.error('Error adding rental:', error);
+      return null;
+    }
+  },
+
+  async update(id: string, rental: RentalTool): Promise<boolean> {
+    try {
+      const rentalData = rentalToDb(rental);
+      delete rentalData.id;
+
+      const { error } = await supabase
+        .from('rental_tools')
+        .update(rentalData)
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error updating rental:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error updating rental:', error);
+      return false;
+    }
+  },
+
+  async delete(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('rental_tools')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting rental:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting rental:', error);
+      return false;
+    }
+  },
+};
+
+// ========== OFFERS API ==========
+
+export const offersApi = {
+  async getAll(): Promise<Offer[]> {
+    try {
+      const { data, error } = await supabase
+        .from('offers')
+        .select(`
+          *,
+          offer_products(product_id),
+          offer_categories(category_id),
+          offer_combos(product_id)
+        `)
+        .order('priority', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching offers:', error);
+        return [];
+      }
+
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        offer_name: row.offer_name,
+        offer_description: row.offer_description,
+        offer_type: row.offer_type,
+        discount_type: row.discount_type,
+        discount_value: row.discount_value,
+        min_quantity: row.min_quantity,
+        max_discount: row.max_discount,
+        start_date: row.start_date,
+        end_date: row.end_date,
+        priority: row.priority,
+        status: row.status,
+        banner_image_url: row.banner_image_url,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        products: row.offer_products?.map((op: any) => op.product_id) || [],
+        categories: row.offer_categories?.map((oc: any) => oc.category_id) || [],
+        combo_products: row.offer_combos?.map((oc: any) => oc.product_id) || [],
+      }));
+    } catch (error) {
+      console.error('Error fetching offers:', error);
+      return [];
+    }
+  },
+
+  async getActive(): Promise<Offer[]> {
+    try {
+      const { data, error } = await supabase
+        .from('offers')
+        .select(`
+          *,
+          offer_products(product_id),
+          offer_categories(category_id),
+          offer_combos(product_id)
+        `)
+        .eq('status', 'active')
+        .or('end_date.is.null,end_date.gt.now()')
+        .order('priority', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching active offers:', error);
+        return [];
+      }
+
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        offer_name: row.offer_name,
+        offer_description: row.offer_description,
+        offer_type: row.offer_type,
+        discount_type: row.discount_type,
+        discount_value: row.discount_value,
+        min_quantity: row.min_quantity,
+        max_discount: row.max_discount,
+        start_date: row.start_date,
+        end_date: row.end_date,
+        priority: row.priority,
+        status: row.status,
+        banner_image_url: row.banner_image_url,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        products: row.offer_products?.map((op: any) => op.product_id) || [],
+        categories: row.offer_categories?.map((oc: any) => oc.category_id) || [],
+        combo_products: row.offer_combos?.map((oc: any) => oc.product_id) || [],
+      }));
+    } catch (error) {
+      console.error('Error fetching active offers:', error);
+      return [];
+    }
+  },
+
+  async add(offer: Omit<Offer, 'id' | 'created_at'>): Promise<Offer | null> {
+    try {
+      console.log('Adding offer:', offer);
+      
+      const offerData = {
+        offer_name: offer.offer_name,
+        offer_description: offer.offer_description,
+        offer_type: offer.offer_type,
+        discount_type: offer.discount_type,
+        discount_value: offer.discount_value,
+        min_quantity: offer.min_quantity,
+        max_discount: offer.max_discount,
+        start_date: offer.start_date,
+        end_date: offer.end_date,
+        priority: offer.priority,
+        status: offer.status,
+        banner_image_url: offer.banner_image_url,
+        updated_at: new Date().toISOString(),
+      };
+
+      console.log('Converted to DB format:', offerData);
+
+      const { data, error } = await supabase
+        .from('offers')
+        .insert(offerData as any)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding offer:', error);
+        return null;
+      }
+
+      // Add related records if they exist
+      if (offer.products && offer.products.length > 0) {
+        await supabase
+          .from('offer_products')
+          .insert(
+            offer.products.map(product_id => ({
+              offer_id: data.id,
+              product_id
+            })) as any
+          );
+      }
+
+      if (offer.categories && offer.categories.length > 0) {
+        await supabase
+          .from('offer_categories')
+          .insert(
+            offer.categories.map(category_id => ({
+              offer_id: data.id,
+              category_id
+            })) as any
+          );
+      }
+
+      if (offer.combo_products && offer.combo_products.length > 0) {
+        await supabase
+          .from('offer_combos')
+          .insert(
+            offer.combo_products.map(product_id => ({
+              offer_id: data.id,
+              product_id
+            })) as any
+          );
+      }
+
+      // Return the complete offer with relations
+      return await this.getById(data.id);
+    } catch (error) {
+      console.error('Error adding offer:', error);
+      return null;
+    }
+  },
+
+  async getById(id: string): Promise<Offer | null> {
+    try {
+      const { data, error } = await supabase
+        .from('offers')
+        .select(`
+          *,
+          offer_products(product_id),
+          offer_categories(category_id),
+          offer_combos(product_id)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching offer:', error);
+        return null;
+      }
+
+      return {
+        id: data.id,
+        offer_name: data.offer_name,
+        offer_description: data.offer_description,
+        offer_type: data.offer_type,
+        discount_type: data.discount_type,
+        discount_value: data.discount_value,
+        min_quantity: data.min_quantity,
+        max_discount: data.max_discount,
+        start_date: data.start_date,
+        end_date: data.end_date,
+        priority: data.priority,
+        status: data.status,
+        banner_image_url: data.banner_image_url,
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+        products: data.offer_products?.map((op: any) => op.product_id) || [],
+        categories: data.offer_categories?.map((oc: any) => oc.category_id) || [],
+        combo_products: data.offer_combos?.map((oc: any) => oc.product_id) || [],
+      };
+    } catch (error) {
+      console.error('Error fetching offer:', error);
+      return null;
+    }
+  },
+
+  async update(id: string, offer: Partial<Offer>): Promise<boolean> {
+    try {
+      // Update main offer record
+      const updateData: any = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (offer.offer_name !== undefined) updateData.offer_name = offer.offer_name;
+      if (offer.offer_description !== undefined) updateData.offer_description = offer.offer_description;
+      if (offer.offer_type !== undefined) updateData.offer_type = offer.offer_type;
+      if (offer.discount_type !== undefined) updateData.discount_type = offer.discount_type;
+      if (offer.discount_value !== undefined) updateData.discount_value = offer.discount_value;
+      if (offer.min_quantity !== undefined) updateData.min_quantity = offer.min_quantity;
+      if (offer.max_discount !== undefined) updateData.max_discount = offer.max_discount;
+      if (offer.start_date !== undefined) updateData.start_date = offer.start_date;
+      if (offer.end_date !== undefined) updateData.end_date = offer.end_date;
+      if (offer.priority !== undefined) updateData.priority = offer.priority;
+      if (offer.status !== undefined) updateData.status = offer.status;
+      if (offer.banner_image_url !== undefined) updateData.banner_image_url = offer.banner_image_url;
+
+      const { error } = await supabase
+        .from('offers')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error updating offer:', error);
+        return false;
+      }
+
+      // Update related records
+      if (offer.products !== undefined) {
+        // Delete existing products
+        await supabase.from('offer_products').delete().eq('offer_id', id);
+        // Add new products
+        if (offer.products.length > 0) {
+          await supabase
+            .from('offer_products')
+            .insert(
+              offer.products.map(product_id => ({
+                offer_id: id,
+                product_id
+              }))
+            );
+        }
+      }
+
+      if (offer.categories !== undefined) {
+        // Delete existing categories
+        await supabase.from('offer_categories').delete().eq('offer_id', id);
+        // Add new categories
+        if (offer.categories.length > 0) {
+          await supabase
+            .from('offer_categories')
+            .insert(
+              offer.categories.map(category_id => ({
+                offer_id: id,
+                category_id
+              }))
+            );
+        }
+      }
+
+      if (offer.combo_products !== undefined) {
+        // Delete existing combo products
+        await supabase.from('offer_combos').delete().eq('offer_id', id);
+        // Add new combo products
+        if (offer.combo_products.length > 0) {
+          await supabase
+            .from('offer_combos')
+            .insert(
+              offer.combo_products.map(product_id => ({
+                offer_id: id,
+                product_id
+              }))
+            );
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error updating offer:', error);
+      return false;
+    }
+  },
+
+  async delete(id: string): Promise<boolean> {
+    try {
+      // Delete related records first
+      await supabase.from('offer_products').delete().eq('offer_id', id);
+      await supabase.from('offer_categories').delete().eq('offer_id', id);
+      await supabase.from('offer_combos').delete().eq('offer_id', id);
+
+      // Delete main offer record
+      const { error } = await supabase
+        .from('offers')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting offer:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting offer:', error);
+      return false;
+    }
+  },
+};
+
+export const enquiriesApi = {
+  async save(enquiry: Omit<Enquiry, 'id' | 'date'>): Promise<boolean> {
+    try {
+      // Map frontend type values to database values
+      const dbEnquiry = {
+        name: enquiry.name,
+        phone: enquiry.phone,
+        message: enquiry.message,
+        type: enquiry.type.charAt(0).toUpperCase() + enquiry.type.slice(1).toLowerCase(), // Capitalize first letter
+      };
+
+      const { data, error } = await supabase
+        .from('enquiries')
+        .insert(dbEnquiry as any);
+
+      if (error) {
+        console.error('Error saving enquiry:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error saving enquiry:', error);
+      return false;
+    }
+  },
+
+  async getAll(): Promise<Enquiry[]> {
+    try {
+      const { data, error } = await supabase
+        .from('enquiries')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching enquiries:', error);
+        return [];
+      }
+
+      // Map database rows to frontend Enquiry type
+      return ((data || []) as any[]).map(item => ({
+        id: item.id,
+        name: item.name,
+        phone: item.phone,
+        message: item.message,
+        type: item.type.toLowerCase() as 'product' | 'rental' | 'general',
+        date: item.created_at,
+      }));
+    } catch (error) {
+      console.error('Error fetching enquiries:', error);
+      return [];
+    }
+  },
+};
