@@ -2,48 +2,56 @@
 
 :root {
   --font-size: 16px;
-  --background: #ffffff;
-  --foreground: oklch(0.145 0 0);
+  --background: #FFFFFF;
+  --foreground: #111827;
   --card: #ffffff;
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: #030213;
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.95 0.0058 264.53);
-  --secondary-foreground: #030213;
-  --muted: #ececf0;
-  --muted-foreground: #717182;
-  --accent: #e9ebef;
-  --accent-foreground: #030213;
-  --destructive: #d4183d;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --primary: #1B5E20;
+  --primary-foreground: #ffffff;
+  --secondary: #66BB6A;
+  --secondary-foreground: #ffffff;
+  --muted: #F3F4F6;
+  --muted-foreground: #4B5563;
+  --accent: #FFF59D;
+  --accent-foreground: #1B5E20;
+  --destructive: #ef233c;
   --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.1);
+  --border: #E5E7EB;
   --input: transparent;
-  --input-background: #f3f3f5;
-  --switch-background: #cbced4;
+  --input-background: #ffffff;
+  --switch-background: #1B5E20;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #030213;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --ring: #1B5E20;
+  --radius: 16px;
   
-  /* INGCO Brand Colors */
-  --ingco-yellow: #FFC400;
-  --ingco-black: #1a1a1a;
-  --ingco-dark-grey: #2d2d2d;
+  /* Palani Basket Premium */
+  --pb-green-deep: #064E3B; /* More premium emerald */
+  --pb-green-leaf: #10B981;
+  --pb-green-soft: #ECFDF5;
+  --pb-yellow: #FDE047;
+  --pb-cta: #111827; /* Near black high-contrast CTA */
+  --pb-bg: #F9FAFB;
+  --pb-white: #FFFFFF;
+  
+  /* Button System Tokens */
+  --btn-radius: 12px;
+  --input-radius: 10px;
+  --btn-font-weight: 600;
+  --btn-transition: 200ms ease;
+  --btn-hover-scale: 1.02;
+  --btn-active-scale: 0.97;
+
+  --font-inter: "Inter", sans-serif;
+  --font-poppins: "Poppins", sans-serif;
+  --font-playfair: "Playfair Display", serif;
+
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-blur: 12px;
 }
 
 .dark {
@@ -122,6 +130,18 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Custom Palani Basket Theme */
+  --color-pb-green-deep: var(--pb-green-deep);
+  --color-pb-green-leaf: var(--pb-green-leaf);
+  --color-pb-green-soft: var(--pb-green-soft);
+  --color-pb-yellow: var(--pb-yellow);
+  --color-pb-cta: var(--pb-cta);
+  --color-pb-bg: var(--pb-bg);
+  --color-pb-white: var(--pb-white);
+
+  --font-inter: var(--font-inter);
+  --font-poppins: var(--font-poppins);
 }
 
 @layer base {
