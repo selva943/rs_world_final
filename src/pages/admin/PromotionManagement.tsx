@@ -272,6 +272,18 @@ const CouponCard = ({ coupon, onEdit, onDelete, onToggleActive }: any) => {
           )}>
             {coupon.is_active ? 'Live' : 'Inactive'}
           </Badge>
+          <div className="flex items-center gap-2">
+            {coupon.first_order_only && (
+              <Badge variant="outline" className="text-[8px] bg-blue-50 text-blue-600 border-blue-100">
+                1st Order
+              </Badge>
+            )}
+            {coupon.applicable_categories && coupon.applicable_categories.length > 0 && (
+              <Badge variant="outline" className="text-[8px] bg-amber-50 text-amber-600 border-amber-100">
+                Categorized
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button 
               variant="ghost" 
@@ -406,6 +418,8 @@ const NewCouponModal = ({ isOpen, onClose, onSave, initialData }: any) => {
     per_user_limit: initialData?.per_user_limit || 1,
     valid_from: initialData?.valid_from ? new Date(initialData.valid_from).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     valid_to: initialData?.valid_to ? new Date(initialData.valid_to).toISOString().split('T')[0] : '',
+    applicable_categories: initialData?.applicable_categories || [] as string[],
+    first_order_only: initialData?.first_order_only || false,
     is_active: initialData?.is_active ?? true
   });
 
@@ -540,6 +554,52 @@ const NewCouponModal = ({ isOpen, onClose, onSave, initialData }: any) => {
                 onChange={e => setForm({...form, valid_to: e.target.value})} 
                 className="rounded-xl"
               />
+            </div>
+          </div>
+
+          <div className="space-y-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-bold">First Order Only</Label>
+                <p className="text-[10px] text-slate-500">Only for new customers</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setForm({...form, first_order_only: !form.first_order_only})}
+                className={cn(
+                  "w-10 h-5 rounded-full transition-colors relative",
+                  form.first_order_only ? "bg-primary" : "bg-slate-300"
+                )}
+              >
+                <div className={cn(
+                  "absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all",
+                  form.first_order_only ? "left-5.5" : "left-0.5"
+                )} />
+              </button>
+            </div>
+            
+            <div className="space-y-2 pt-2 border-t border-slate-200">
+              <Label className="text-xs font-bold">Applicable Categories</Label>
+              <div className="flex flex-wrap gap-2">
+                {useData().categories.map(cat => (
+                  <Badge 
+                    key={cat.id}
+                    variant={form.applicable_categories.includes(cat.id) ? "default" : "outline"}
+                    className="cursor-pointer rounded-lg px-3 py-1 text-[10px]"
+                    onClick={() => {
+                      const cats = [...form.applicable_categories];
+                      if (cats.includes(cat.id)) {
+                        setForm({...form, applicable_categories: cats.filter(id => id !== cat.id)});
+                      } else {
+                        setForm({...form, applicable_categories: [...cats, cat.id]});
+                      }
+                    }}
+                  >
+                    {cat.name}
+                  </Badge>
+                ))}
+              </div>
+              <p className="text-[9px] text-slate-400 italic">Leave empty to apply to all categories.</p>
             </div>
           </div>
 

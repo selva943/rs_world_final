@@ -22,9 +22,11 @@ import {
   Trash2,
   Minus,
   Plus,
-  AlertCircle
+  AlertCircle,
+  Navigation
 } from 'lucide-react';
 import { OTPModal } from '@/components/OTPModal';
+import { MapPicker } from '@/components/MapPicker';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { submitOrder } from '@/lib/services/orderService';
@@ -55,11 +57,14 @@ export default function Checkout() {
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [showOtpModal, setShowOtpModal] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
 
   const [form, setForm] = useState({
     customer_name: user?.user_metadata?.full_name || user?.user_metadata?.name || '',
     phone: user?.phone || '',
     address: '',
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
     delivery_type: 'delivery' as 'delivery' | 'pickup',
     payment_method: 'cod' as 'cod' | 'whatsapp',
     notes: '',
@@ -112,6 +117,8 @@ export default function Checkout() {
           customer_name: form.customer_name,
           phone: form.phone,
           address: form.address,
+          latitude: form.latitude,
+          longitude: form.longitude,
           delivery_type: form.delivery_type,
           payment_method: form.payment_method,
           notes: form.notes,
@@ -198,7 +205,7 @@ export default function Checkout() {
             {t('order_success_message', { orderId: orderId.split('-')[0].toUpperCase() })}
           </p>
           <div className="flex flex-col gap-3 pt-4">
-            <Button size="lg" className="bg-primary hover:bg-primary/90" onClick={() => navigate('/orders')}>
+            <Button size="lg" className="bg-primary hover:bg-primary/90" onClick={() => navigate('/my-orders')}>
               {t('track_order_button')}
             </Button>
             <Button variant="outline" size="lg" onClick={() => navigate('/')}>
@@ -359,7 +366,18 @@ export default function Checkout() {
                       exit={{ opacity: 0, height: 0 }}
                       className="space-y-2 pt-2"
                     >
-                      <Label htmlFor="address">{t('delivery_address_label')}</Label>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="address">{t('delivery_address_label')}</Label>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 text-[10px] text-primary hover:text-primary hover:bg-primary/5 font-bold"
+                          onClick={() => setIsMapOpen(true)}
+                        >
+                          <Navigation className="w-3 h-3 mr-1" /> {t('select_on_map')}
+                        </Button>
+                      </div>
                       <div className="relative">
                         <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                         <Textarea
@@ -371,6 +389,11 @@ export default function Checkout() {
                           onChange={(e) => setForm({ ...form, address: e.target.value })}
                         />
                       </div>
+                      {form.latitude && (
+                        <p className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium bg-emerald-50 w-fit px-2 py-0.5 rounded-full">
+                          <CheckCircle2 className="w-2.5 h-2.5" /> Location Pinned (Accurate)
+                        </p>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -569,7 +592,12 @@ export default function Checkout() {
                           <Tag className="w-4 h-4 text-primary" />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-primary">{appliedCoupon.code}</p>
+                          <p className="text-xs font-bold text-primary flex items-center gap-2">
+                            {appliedCoupon.code}
+                            <Badge variant="outline" className="text-[8px] h-4 px-1.5 bg-primary/10 text-primary border-primary/20">
+                              Best Deal
+                            </Badge>
+                          </p>
                           <p className="text-[10px] text-primary/60">Coupon Applied Successfully</p>
                         </div>
                       </div>
@@ -688,10 +716,20 @@ export default function Checkout() {
       <OTPModal 
         isOpen={showOtpModal} 
         onClose={() => setShowOtpModal(false)}
+        phone={form.phone}
         onSuccess={() => {
           setShowOtpModal(false);
-          // Retry submit will be handled by user clicking button again or we can trigger it
-          toast.success("Login successful! You can now complete your order.");
+          handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+        }}
+      />
+
+      <MapPicker
+        isOpen={isMapOpen}
+        onClose={() => setIsMapOpen(false)}
+        initialLat={form.latitude}
+        initialLng={form.longitude}
+        onSelect={(lat, lng, addr) => {
+          setForm({ ...form, latitude: lat, longitude: lng, address: addr });
         }}
       />
     </div>

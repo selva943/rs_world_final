@@ -108,6 +108,8 @@ export interface Order {
   customer_name: string;
   phone: string;
   address?: string;
+  latitude?: number;
+  longitude?: number;
   delivery_type?: string;
   scheduled_date?: string;
   scheduled_time?: string;
@@ -149,6 +151,7 @@ export interface Offer {
   title: string;
   name: string;
   slug: string;
+  code?: string;
   description?: string;
   logic_type?: 'percentage' | 'bogo' | 'free_delivery' | 'bundle' | 'flat';
   offer_type: 'all' | 'product' | 'category' | 'combo';
@@ -188,6 +191,8 @@ export interface Coupon {
   per_user_limit: number;
   valid_from: string;
   valid_to?: string;
+  applicable_categories?: string[]; // New: List of category IDs or names
+  first_order_only?: boolean; // New: Restriction for new users
   is_active: boolean;
   is_deleted?: boolean;
   created_at: string;
@@ -276,6 +281,10 @@ export interface SubscriptionDelivery {
   subscription_id: string;
   order_id?: string;
   delivery_date: string;
+  latitude?: number;
+  longitude?: number;
+  worker_id?: string;
+  delivery_type?: string;
   status: 'pending' | 'delivered' | 'skipped' | 'failed';
   notes?: string;
   created_at: string;

@@ -11,17 +11,24 @@ interface OTPModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  phone?: string;
 }
 
-export function OTPModal({ isOpen, onClose, onSuccess }: OTPModalProps) {
+export function OTPModal({ isOpen, onClose, onSuccess, phone: initialPhone }: OTPModalProps) {
   const { sendOtp, verifyOtp } = useAuth();
   
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(initialPhone || '');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && initialPhone) {
+        setPhone(initialPhone);
+    }
+  }, [isOpen, initialPhone]);
 
   useEffect(() => {
     let timer: any;

@@ -335,11 +335,34 @@ export const OrderManagement: React.FC = () => {
 
                       {/* Delivery Address Block */}
                       {selectedOrder.address && (
-                        <div className="p-6 bg-amber-50 rounded-[2rem] border border-amber-100 space-y-2">
+                        <div className="p-6 bg-amber-50 rounded-[2rem] border border-amber-100 space-y-4">
                           <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-1.5 text-left justify-start">
                             <MapPin className="w-3.5 h-3.5" /> Delivery Address
                           </label>
                           <p className="text-sm font-semibold text-amber-950 leading-relaxed text-left">{selectedOrder.address}</p>
+                          
+                          {selectedOrder.latitude && selectedOrder.longitude && (
+                            <div className="pt-2">
+                               <div className="w-full h-32 rounded-xl overflow-hidden border border-amber-200 relative z-10">
+                                  <iframe 
+                                    width="100%" 
+                                    height="100%" 
+                                    frameBorder="0" 
+                                    scrolling="no" 
+                                    marginHeight={0} 
+                                    marginWidth={0} 
+                                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${selectedOrder.longitude-0.005}%2C${selectedOrder.latitude-0.005}%2C${selectedOrder.longitude+0.005}%2C${selectedOrder.latitude+0.005}&layer=mapnik&marker=${selectedOrder.latitude}%2C${selectedOrder.longitude}`}
+                                  />
+                               </div>
+                               <Button 
+                                 variant="outline" 
+                                 className="w-full mt-2 h-8 text-[10px] font-bold uppercase tracking-widest bg-white"
+                                 onClick={() => window.open(`https://www.google.com/maps?q=${selectedOrder.latitude},${selectedOrder.longitude}`)}
+                               >
+                                  Open in Google Maps
+                               </Button>
+                            </div>
+                          )}
                         </div>
                       )}
 

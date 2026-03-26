@@ -19,9 +19,10 @@ import {
 import { ExperienceCard } from '@/components/ExperienceCard';
 import { useData } from '@/context/DataContext';
 import { useState, useEffect } from 'react';
-import { Experience, Offer } from '@/types/app';
-import { offersApi, experiencesApi } from '@/lib/services/api';
+import { Experience, Offer, Coupon } from '@/types/app';
+import { offersApi, experiencesApi, couponsApi } from '@/lib/services/api';
 import { OfferCarousel } from '@/components/OfferCarousel';
+import { PromoTicker } from '@/components/PromoTicker';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 
@@ -30,12 +31,17 @@ export function Home() {
   const { experiences, testimonials, loading } = useData();
   const [featuredProducts, setFeaturedProducts] = useState<Experience[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [offersLoading, setOffersLoading] = useState(true);
 
   useEffect(() => {
-    const fetchOffers = async () => {
-      const activeOffers = await offersApi.getActive();
+    const fetchPromos = async () => {
+      const [activeOffers, activeCoupons] = await Promise.all([
+        offersApi.getActive(),
+        couponsApi.getAll()
+      ]);
       setOffers(activeOffers);
+      setCoupons(activeCoupons.filter(c => c.is_active));
       setOffersLoading(false);
     };
 
@@ -44,7 +50,7 @@ export function Home() {
       setFeaturedProducts(featured);
     };
 
-    fetchOffers();
+    fetchPromos();
     fetchFeatured();
   }, []);
 
@@ -64,6 +70,17 @@ export function Home() {
       {/* Hero Section */}
       <section className="relative min-h-[85vh] flex items-center pt-10 overflow-hidden bg-[#F7F9F7]">
         <div className="container mx-auto px-4 relative z-10">
+          {/* Promo Ticker - Headless version */}
+          {!offersLoading && (offers.length > 0 || coupons.length > 0) && (
+            <div className="mb-8 -mx-4 animate-in fade-in slide-in-from-top-4 duration-1000">
+              <PromoTicker 
+                offers={offers} 
+                coupons={coupons}
+                className="" 
+              />
+            </div>
+          )}
+          
           <div className="max-w-4xl">
 
             <div className="inline-flex items-center gap-2 mb-6 px-4 py-2 glass rounded-full text-pb-green-deep text-sm font-black uppercase tracking-widest animate-in fade-in slide-in-from-left-4 duration-1000 border-pb-green-deep/10 shadow-sm">
@@ -181,27 +198,6 @@ export function Home() {
         </div>
       </section>
 
-      {offers.length > 0 && (
-        <section className="py-24 relative overflow-hidden bg-white">
-          <div className="container mx-auto px-4 mb-16">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-              <div>
-                <div className="text-[#66BB6A] font-black uppercase tracking-[0.3em] text-[10px] mb-4">{t('limited_availability')}</div>
-                <h2 className="text-4xl md:text-6xl font-playfair font-bold text-pb-green-deep">{t('exclusive_offers')}</h2>
-              </div>
-              <Link to="/offers">
-                <Button variant="outline" className="border-pb-green-deep/10 h-14 px-10 rounded-[1.5rem] text-pb-green-deep hover:bg-pb-green-deep hover:text-[#FFF59D] font-black uppercase tracking-widest text-xs">
-                  {t('view_all_offers')}
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-          <div className="relative">
-            <OfferCarousel offers={offers.filter(o => o.is_featured).length > 0 ? offers.filter(o => o.is_featured) : offers.slice(0, 5)} />
-          </div>
-        </section>
-      )}
 
 
       {/* How It Works */}

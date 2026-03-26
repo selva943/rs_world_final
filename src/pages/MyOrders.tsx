@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ordersApi, bookingsApi, subscriptionsApi } from '@/lib/services/api';
 import { cancelOrder } from '@/lib/services/orderService';
 import { Order, Booking, Subscription } from '@/types/app';
+import { OrderTrackingMap } from '@/components/OrderTrackingMap';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -261,6 +262,16 @@ function OrderCard({ order, onUpdate }: { order: Order; onUpdate: () => void }) 
                 <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter w-12 text-center">Out</span>
                 <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter w-12 text-center">Delivered</span>
               </div>
+            </div>
+          )}
+
+          {/* Tracking Map for Out for Delivery */}
+          {order.status.toLowerCase() === 'out_for_delivery' && order.latitude && order.longitude && (
+            <div className="mb-8 pt-4 border-t border-slate-50">
+               <OrderTrackingMap 
+                 lat={order.latitude} 
+                 lng={order.longitude} 
+               />
             </div>
           )}
 

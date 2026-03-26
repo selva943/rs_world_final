@@ -24,6 +24,8 @@ export interface OrderFormInput {
   customer_name: string;
   phone: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
   delivery_type: 'delivery' | 'pickup';
   payment_method: 'cod' | 'whatsapp';
   notes?: string;
@@ -133,6 +135,8 @@ export async function submitOrder(
       customer_name: form.customer_name.trim(),
       phone: form.phone.trim(),
       address: form.delivery_type === 'delivery' ? form.address.trim() : 'Store Pickup',
+      latitude: form.latitude,
+      longitude: form.longitude,
       delivery_type: form.delivery_type,
       scheduled_date: form.scheduled_date,
       scheduled_time: form.scheduled_time,

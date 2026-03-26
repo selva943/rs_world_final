@@ -172,17 +172,45 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setBestOffer(null);
         return;
       }
+      
+      // 1. Get standard Offers (Auto)
       const offer = await offersApi.getBestOffer(subtotal, categorySubtotals, items);
       setBestOffer(offer);
+
+      // 2. Optimized Auto-Apply Coupon logic (If no manual coupon is applied)
+      // Improvements: Simulate all eligible coupons and pick the best one
+      if (!appliedCoupon && items.length > 0) {
+        const { getEligibleCoupons } = await import('@/lib/services/couponService');
+        const eligibleCoupons = await getEligibleCoupons(user?.id, subtotal, items);
+        
+        if (eligibleCoupons.length > 0) {
+          let topCoupon: Coupon | null = null;
+          let maxSavings = 0;
+
+          eligibleCoupons.forEach(coupon => {
+            const { discount } = calculateCouponDiscount(coupon, subtotal, items);
+            if (discount > maxSavings) {
+              maxSavings = discount;
+              topCoupon = coupon;
+            }
+          });
+
+          if (topCoupon) {
+            // We don't call applyCoupon because that shows a toast. 
+            // Auto-apply should be silent or separate.
+            setAppliedCoupon(topCoupon);
+          }
+        }
+      }
     };
     findOffer();
-  }, [subtotal, categorySubtotals, items]);
+  }, [subtotal, categorySubtotals, items, user]);
 
   // Validation check for coupon whenever cart or user changes
   useEffect(() => {
     if (appliedCoupon) {
       const revalidate = async () => {
-        const result = await validateCoupon(appliedCoupon.code, user?.id, subtotal);
+        const result = await validateCoupon(appliedCoupon.code, user?.id, subtotal, items);
         if (!result.valid) {
            setAppliedCoupon(null);
            toast.error(`Coupon removed: ${result.message}`);
@@ -190,10 +218,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       revalidate();
     }
-  }, [subtotal, user, appliedCoupon]);
+  }, [subtotal, user, appliedCoupon, items]);
 
   const applyCoupon = async (code: string) => {
-    const result = await validateCoupon(code, user?.id, subtotal);
+    const result = await validateCoupon(code, user?.id, subtotal, items);
     if (result.valid && result.coupon) {
       setAppliedCoupon(result.coupon);
       toast.success(`Coupon "${code}" applied successfully!`);
@@ -208,20 +236,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAppliedCoupon(null);
     toast.info('Coupon removed');
   };
-
-  // Validation check for coupon whenever cart or user changes
-  useEffect(() => {
-    if (appliedCoupon) {
-      const revalidate = async () => {
-        const result = await validateCoupon(appliedCoupon.code, user?.id, subtotal);
-        if (!result.valid) {
-           setAppliedCoupon(null);
-           toast.error(`Coupon removed: ${result.message}`);
-        }
-      };
-      revalidate();
-    }
-  }, [subtotal, user, appliedCoupon]);
 
   // Final Calculations
   const discountTotal = useMemo(() => {
@@ -243,27 +257,29 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 2. Calculate Coupon Savings (Manual)
+    // 2. Calculate Coupon Savings (Manual or Auto-Applied)
     let couponSavings = 0;
     if (appliedCoupon) {
-      const { discount } = calculateCouponDiscount(appliedCoupon, subtotal);
+      const { discount } = calculateCouponDiscount(appliedCoupon, subtotal, items);
       couponSavings = discount;
     }
 
     // 3. Stacking Logic
     if (bestOffer && appliedCoupon) {
       if (bestOffer.allow_with_coupon) {
-        savings = offerSavings + couponSavings;
+        // Round intermediate sums to prevent floating point bugs
+        savings = Math.round(offerSavings) + Math.round(couponSavings);
       } else {
         // Not allowed together? Give the user the BIGGER one.
-        savings = Math.max(offerSavings, couponSavings);
+        savings = Math.max(Math.round(offerSavings), Math.round(couponSavings));
       }
     } else {
-      savings = offerSavings + couponSavings;
+      savings = Math.round(offerSavings) + Math.round(couponSavings);
     }
 
-    return Math.round(savings);
-  }, [subtotal, bestOffer, appliedCoupon, categorySubtotals]);
+    // Ensure savings never exceeds subtotal and no negative values
+    return Math.min(Math.max(0, Math.round(savings)), subtotal);
+  }, [subtotal, bestOffer, appliedCoupon, categorySubtotals, items]);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const finalTotal = Math.max(0, subtotal - discountTotal);
