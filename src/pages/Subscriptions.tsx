@@ -129,7 +129,6 @@ function ActiveSubscriptionRow({
 }) {
   const statusConfig = {
     active: { color: 'text-emerald-600 bg-emerald-50', icon: <CheckCircle2 className="w-4 h-4" />, label: 'Active' },
-    paused: { color: 'text-amber-600 bg-amber-50', icon: <PauseCircle className="w-4 h-4" />, label: 'Paused' },
     cancelled: { color: 'text-rose-500 bg-rose-50', icon: <XCircle className="w-4 h-4" />, label: 'Cancelled' },
   };
   const cfg = statusConfig[sub.status as keyof typeof statusConfig] ?? statusConfig.active;
@@ -170,20 +169,11 @@ function ActiveSubscriptionRow({
       {/* Actions */}
       {sub.status === 'active' && (
         <button
-          onClick={() => onStatusChange(sub.id, 'paused')}
-          className="text-amber-500 hover:text-amber-600 p-2 rounded-xl hover:bg-amber-50 transition-all"
-          title="Pause"
+          onClick={() => onStatusChange(sub.id, 'cancelled')}
+          className="text-rose-500 hover:text-rose-600 p-2 rounded-xl hover:bg-rose-50 transition-all"
+          title="Cancel"
         >
-          <PauseCircle className="w-5 h-5" />
-        </button>
-      )}
-      {sub.status === 'paused' && (
-        <button
-          onClick={() => onStatusChange(sub.id, 'active')}
-          className="text-emerald-500 hover:text-emerald-600 p-2 rounded-xl hover:bg-emerald-50 transition-all"
-          title="Resume"
-        >
-          <CheckCircle2 className="w-5 h-5" />
+          <XCircle className="w-5 h-5" />
         </button>
       )}
     </motion.div>
@@ -222,7 +212,7 @@ export default function SubscriptionsPage() {
             name: row.name,
             slug: row.slug,
             category: row.category,
-            type: row.type,
+            type: 'subscription',
             price: Number(row.price) || 0,
             stock: row.stock || 0,
             unit: row.unit || 'kg',
@@ -260,11 +250,11 @@ export default function SubscriptionsPage() {
     }
   };
 
-  const activeSubscriptions = mySubscriptions.filter(s => s.status === 'active' || s.status === 'paused');
+  const activeSubscriptions = mySubscriptions.filter(s => s.status === 'active');
 
   return (
-    <div className="min-h-screen bg-[#F7F9F7] pt-24 pb-24 px-4 md:px-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-[#F7F9F7] pt-24 pb-24 px-6 md:px-8 overflow-y-auto">
+      <div className="max-w-4xl mx-auto">
 
         {/* ── Page Header ── */}
         <div className="mb-10">

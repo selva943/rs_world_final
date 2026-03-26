@@ -205,16 +205,26 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
       console.log('[ProductForm] Saving payload:', payload);
 
       // ── STEP 3: Insert or Update ─────────────────────────────
+      // ── STEP 3: Insert or Update ─────────────────────────────
       if (editingProduct) {
-        await experiencesApi.update(editingProduct.id, payload);
-        toast.success(`✅ "${form.name}" updated successfully!`);
+        const res = await experiencesApi.update(editingProduct.id, payload);
+        if (res.success) {
+          toast.success(`✅ "${form.name}" updated successfully!`);
+          onSaved();
+          onClose();
+        } else {
+          toast.error(res.message || 'Failed to update product');
+        }
       } else {
-        await experiencesApi.add(payload);
-        toast.success(`✅ "${form.name}" added to catalog!`);
+        const res = await experiencesApi.add(payload);
+        if (res.success) {
+          toast.success(`✅ "${form.name}" added to catalog!`);
+          onSaved();
+          onClose();
+        } else {
+          toast.error(res.message || 'Failed to add product');
+        }
       }
-
-      onSaved();
-      onClose();
     } catch (err: any) {
       console.error('[ProductForm] Save failed:', err);
       toast.dismiss('img-upload');
@@ -621,8 +631,13 @@ export const ProductManagement: React.FC = () => {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
     setDeletingId(id);
-    await deleteExperience(id);
-    toast.success(`"${name}" removed from catalog`);
+    const res = await experiencesApi.delete(id);
+    if (res.success) {
+      toast.success(`"${name}" removed from catalog`);
+      refreshExperiences();
+    } else {
+      toast.error(res.message || 'Failed to delete product');
+    }
     setDeletingId(null);
   };
 

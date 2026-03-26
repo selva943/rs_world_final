@@ -26,10 +26,14 @@ export const BookingManagement: React.FC = () => {
 
   const handleStatusChange = async (id: string, newStatus: BookingStatus) => {
     try {
-      await updateBookingStatus(id, newStatus);
-      toast.success(`Booking marked as ${newStatus}`);
+      const res = await updateBookingStatus(id, newStatus);
+      if (res.success) {
+        toast.success(`Booking ${newStatus}`);
+      } else {
+        toast.error(res.message || 'Failed to update booking status');
+      }
     } catch {
-      toast.error('Failed to update booking status');
+      toast.error('An unexpected error occurred');
     }
   };
 
@@ -105,14 +109,14 @@ export const BookingManagement: React.FC = () => {
                         {b.time_slot && (
                            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-blue-400" />{b.time_slot}</span>
                         )}
-                        {b.address && <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{b.address}</span>}
+                        {b.address && <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{b.address} · {b.user_pincode}</span>}
                       </div>
                     </div>
 
                     {/* Price */}
                     <div className="text-right px-6 border-x border-slate-50 flex-shrink-0">
-                      <p className="text-2xl font-black text-slate-900">₹{b.service?.price || '0'}</p>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-pb-green-deep">Service Fee</p>
+                      <p className="text-2xl font-black text-slate-900">₹{b.total_price || b.service?.price || '0'}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-pb-green-deep">Total Price</p>
                     </div>
 
                     {/* Actions */}

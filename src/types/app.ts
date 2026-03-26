@@ -46,8 +46,11 @@ export interface Experience {
   service_type?: string;
   service_price_type?: 'fixed' | 'hourly';
   service_duration?: string; // e.g. "1 hour", "2 hours"
-  service_area?: string[]; // Areas where service is available
-  peak_hour_multiplier?: number; // Dynamic pricing (e.g. 1.2x)
+  service_pincodes?: string[]; // Array of allowed pincodes
+  max_bookings_per_slot?: number;
+  peak_multiplier?: number;
+  weekend_multiplier?: number;
+  same_day_multiplier?: number;
   
   // Subscription specific (User-facing)
   subscription_type?: string;
@@ -55,6 +58,7 @@ export interface Experience {
   
   is_featured: boolean;
   is_active: boolean;
+  is_deleted?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -76,6 +80,7 @@ export interface Category {
   image?: string;
   display_order: number;
   is_active: boolean;
+  is_deleted?: boolean;
   created_at: string;
 }
 
@@ -108,8 +113,12 @@ export interface Order {
   payment_status: 'pending' | 'paid' | 'failed';
   payment_method: string;
   total_amount: number;
+  discount_amount?: number;
+  coupon_id?: string;
+  applied_offer_id?: string;
   notes?: string;
   user_id?: string;
+  is_deleted?: boolean;
   created_at: string;
   // joined relations
   items?: OrderItem[];
@@ -129,26 +138,65 @@ export interface Testimonial {
   message: string;
   media: string;
   rating: number;
+  is_deleted?: boolean;
   created_at: string;
 }
 
 export interface Offer {
   id: string;
+  title: string;
   name: string;
   slug: string;
   description?: string;
-  offer_type: 'product' | 'category' | 'combo';
+  logic_type?: 'percentage' | 'bogo' | 'free_delivery' | 'bundle' | 'flat';
+  offer_type: 'all' | 'product' | 'category' | 'combo';
   discount_type: 'percentage' | 'fixed';
   discount_value: number;
   min_quantity: number;
+  min_order_amount?: number;
   max_discount?: number;
+  buy_quantity?: number;
+  get_quantity?: number;
+  target_audience?: 'all_users' | 'new_users' | 'specific_users';
+  total_usage_limit?: number;
+  per_user_limit?: number;
+  priority?: number;
+  allow_with_coupon?: boolean;
+  product_id?: string;
+  category_id?: string;
   start_date: string;
   end_date?: string;
   banner_image?: string;
   badge?: string;
   is_active: boolean;
   is_featured: boolean;
+  is_deleted?: boolean;
   created_at: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  type: 'flat' | 'percent' | 'free_delivery';
+  value: number;
+  min_order_amount: number;
+  max_discount?: number;
+  usage_limit?: number;
+  used_count: number;
+  per_user_limit: number;
+  valid_from: string;
+  valid_to?: string;
+  is_active: boolean;
+  is_deleted?: boolean;
+  created_at: string;
+}
+
+export interface CouponUsage {
+  id: string;
+  coupon_id: string;
+  user_id: string;
+  order_id?: string;
+  used_at: string;
 }
 
 // Related table interfaces
@@ -213,6 +261,7 @@ export interface Subscription {
     custom_dates?: string[]; // ISO dates
   };
   days_of_week?: number[];
+  is_deleted?: boolean;
   created_at: string;
   updated_at: string;
   
@@ -244,6 +293,12 @@ export interface Service {
   image?: string; // Standardized frontend image field
   is_active: boolean;
   is_featured: boolean;
+  max_bookings_per_slot?: number;
+  service_pincodes?: string[];
+  peak_multiplier?: number;
+  weekend_multiplier?: number;
+  same_day_multiplier?: number;
+  is_deleted?: boolean;
   created_at: string;
 }
 
@@ -261,9 +316,14 @@ export interface Booking {
   time_slot: string; // e.g. "9-11 AM"
   slot_time?: string; // Alias for UI compatibility
   total_price?: number; // Calculated price for analytics
+  user_pincode?: string;
+  rating?: number;
+  feedback?: string;
+  worker_id?: string;
   status: BookingStatus;
   address: string;
   notes?: string;
+  is_deleted?: boolean;
   created_at: string;
   
   // Joined fields
@@ -310,6 +370,7 @@ export interface Recipe {
   orders_count?: number;
   
   ingredients?: RecipeIngredient[];
+  is_deleted?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -324,4 +385,11 @@ export interface RecipeIngredient {
   display_order: number;
   // Joined field
   product?: Experience; 
+}
+
+export interface AdminApiResponse<T = any> {
+  success: boolean;
+  message: string;
+  data?: T;
+  error?: string;
 }

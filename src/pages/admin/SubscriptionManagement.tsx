@@ -17,7 +17,6 @@ import {
   MoreVertical,
   RefreshCcw
 } from 'lucide-react';
-import { subscriptionsApi } from '@/lib/services/api';
 import { Subscription, SubscriptionStatus } from '@/types/app';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -25,38 +24,27 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
+import { useData } from '@/context/DataContext';
+
 export const SubscriptionManagement: React.FC = () => {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { subscriptions, loading, updateSubscriptionStatus } = useData();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<SubscriptionStatus | 'all'>('all');
 
-  const fetchSubscriptions = async () => {
-    try {
-      const data = await subscriptionsApi.getAll();
-      setSubscriptions(data);
-    } catch (err) {
-      toast.error("Failed to load subscriptions");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSubscriptions();
-  }, []);
-
   const handleStatusChange = async (id: string, newStatus: SubscriptionStatus) => {
     try {
-      await subscriptionsApi.updateStatus(id, newStatus);
-      toast.success(`Subscription ${newStatus} successfully`);
-      fetchSubscriptions();
+      const res = await updateSubscriptionStatus(id, newStatus);
+      if (res.success) {
+        toast.success(`Subscription ${newStatus}`);
+      } else {
+        toast.error(res.message || "Failed to update status");
+      }
     } catch (err) {
-      toast.error("Failed to update status");
+      toast.error("An unexpected error occurred");
     }
   };
 
-  const filtered = subscriptions.filter(s => {
+  const filtered = subscriptions.filter((s: Subscription) => {
     const matchesSearch = s.user_phone.includes(search) || 
                          s.product?.name?.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
@@ -119,7 +107,7 @@ export const SubscriptionManagement: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 gap-6">
            <AnimatePresence mode="popLayout">
-             {filtered.map((s, idx) => {
+             {filtered.map((s: Subscription, idx: number) => {
                const config = getStatusConfig(s.status);
                return (
                  <motion.div 

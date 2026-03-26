@@ -20,9 +20,11 @@ import { mapCategory } from '@/lib/services/api';
 import { safeString } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import { OrderModal } from './OrderModal';
 import { SubscriptionModal } from './SubscriptionModal';
 import { useCart } from '@/context/CartContext';
+import { getOptimizedImageUrl } from '@/lib/utils/image-optimization';
 
 interface ExperienceCardProps {
   experience: Experience;
@@ -30,6 +32,7 @@ interface ExperienceCardProps {
 
 export function ExperienceCard({ experience }: ExperienceCardProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { addToCart, items, updateQuantity } = useCart();
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
@@ -79,21 +82,21 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
           className="bg-white border-slate-100 overflow-hidden transition-all duration-300 cursor-pointer group rounded-2xl shadow-sm hover:shadow-md h-full flex flex-col"
           onClick={handleCardClick}
         >
-          {/* Image Container */}
-          <div className="relative h-[160px] w-full overflow-hidden bg-slate-50 flex-shrink-0">
-            {experience?.image ? (
-              <motion.img
-                src={experience.image}
-                alt={safeString(experience?.name, 'Product')}
-                className="w-full h-full object-cover transition-transform duration-700"
-                whileHover={{ scale: 1.1 }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-slate-100">
-                <Package className="w-12 h-12 text-slate-200" />
-              </div>
-            )}
+        {/* Image Container */}
+        <div className="relative h-[160px] w-full overflow-hidden bg-slate-50 flex-shrink-0">
+          {experience?.image ? (
+            <motion.img
+              src={getOptimizedImageUrl(experience.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600', 500)}
+              alt={safeString(experience?.name, 'Product')}
+              className="w-full h-full object-cover transition-transform duration-700"
+              whileHover={{ scale: 1.1 }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-slate-100">
+              <Package className="w-12 h-12 text-slate-200" />
+            </div>
+          )}
             
             {/* Elegant Floating Badges */}
             <div className="absolute top-5 left-5 right-5 flex justify-between items-start pointer-events-none">
@@ -170,7 +173,7 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
             <div className="flex items-baseline gap-1 mb-4">
               <span className="text-sm font-bold text-slate-400">₹</span>
               <span className="text-2xl font-bold text-slate-900 tracking-tight">{experience.price}</span>
-              <span className="text-xs font-medium text-slate-400 uppercase ml-1">/ {experience.unit || 'unit'}</span>
+              <span className="text-xs font-medium text-slate-400 uppercase ml-1">/ {t(experience.unit?.toLowerCase() || 'unit', experience.unit || 'unit')}</span>
             </div>
 
             {/* Enhanced Action Buttons */}
@@ -182,7 +185,7 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
                   disabled={!experience.is_active}
                   className="h-11 sm:h-12 w-full sm:w-auto px-6 rounded-2xl font-black uppercase tracking-widest bg-slate-900 hover:bg-black text-white shadow-xl shadow-black/10 transition-all"
                 >
-                  Book Now
+                  {t('book_now')}
                 </Button>
               ) : (
                 <>
@@ -215,7 +218,7 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
                       disabled={!experience.is_active}
                       className="w-full"
                     >
-                      Add to Cart
+                      {t('add_to_cart')}
                     </Button>
                   )}
                   
@@ -226,7 +229,7 @@ export function ExperienceCard({ experience }: ExperienceCardProps) {
                       onClick={handleSubscribe}
                       className="w-full"
                     >
-                      Subscribe
+                      {t('subscribe')}
                     </Button>
                   )}
                 </>

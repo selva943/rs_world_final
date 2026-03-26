@@ -1,11 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Experience, Offer, Order, Testimonial, Upload, Category, Recipe, Service, Booking } from '@/types/app';
-import { experiencesApi, offersApi, ordersApi, testimonialsApi, uploadsApi, categoriesApi, recipesApi, servicesApi, bookingsApi } from '@/lib/services/api';
+import { Experience, Offer, Order, Testimonial, Upload, Category, Recipe, Service, Booking, Coupon, AdminApiResponse, Subscription, SubscriptionStatus } from '@/types/app';
+import { experiencesApi, offersApi, ordersApi, testimonialsApi, uploadsApi, categoriesApi, recipesApi, servicesApi, bookingsApi, couponsApi, subscriptionsApi } from '@/lib/services/api';
 import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
+import { toast } from 'sonner';
 
 interface DataContextType {
   experiences: Experience[];
+  hasMoreExperiences: boolean;
+  loadMoreExperiences: () => Promise<void>;
   offers: Offer[];
   orders: Order[];
   testimonials: Testimonial[];
@@ -14,6 +17,8 @@ interface DataContextType {
   recipes: Recipe[];
   services: Service[];
   bookings: Booking[];
+  coupons: Coupon[];
+  subscriptions: Subscription[];
   loading: boolean;
   refreshExperiences: () => Promise<void>;
   refreshCategories: () => Promise<void>;
@@ -24,36 +29,45 @@ interface DataContextType {
   refreshUploads: () => Promise<void>;
   refreshServices: () => Promise<void>;
   refreshBookings: () => Promise<void>;
-  addExperience: (experience: Omit<Experience, 'id'>) => Promise<void>;
-  updateExperience: (id: string, experience: Experience) => Promise<void>;
-  deleteExperience: (id: string) => Promise<void>;
-  addOffer: (offer: Omit<Offer, 'id' | 'created_at'>) => Promise<void>;
-  updateOffer: (id: string, offer: Offer) => Promise<void>;
-  deleteOffer: (id: string) => Promise<void>;
-  updateOrderStatus: (id: string, status: Order['status']) => Promise<void>;
-  updateOrder: (id: string, order: Partial<Order>) => Promise<void>;
-  deleteOrder: (id: string) => Promise<void>;
-  addTestimonial: (testimonial: Omit<Testimonial, 'id' | 'created_at'>) => Promise<void>;
-  updateTestimonial: (id: string, testimonial: Partial<Testimonial>) => Promise<void>;
-  deleteTestimonial: (id: string) => Promise<void>;
-  deleteUpload: (id: string) => Promise<void>;
-  addCategory: (category: Omit<Category, 'id' | 'created_at'>) => Promise<void>;
-  updateCategory: (id: string, category: Category) => Promise<void>;
-  deleteCategory: (id: string) => Promise<void>;
-  addRecipe: (recipe: Partial<Recipe>) => Promise<Recipe | null>;
-  updateRecipe: (id: string, recipe: Partial<Recipe>) => Promise<Recipe | null>;
-  deleteRecipe: (id: string) => Promise<void>;
+  refreshCoupons: () => Promise<void>;
+  refreshSubscriptions: () => Promise<void>;
+  addExperience: (experience: Omit<Experience, 'id'>) => Promise<AdminApiResponse<Experience>>;
+  updateExperience: (id: string, experience: Experience) => Promise<AdminApiResponse<Experience>>;
+  deleteExperience: (id: string) => Promise<AdminApiResponse<{ id: string }>>;
+  addOffer: (offer: Omit<Offer, 'id' | 'created_at'>) => Promise<AdminApiResponse<Offer>>;
+  updateOffer: (id: string, offer: Offer) => Promise<AdminApiResponse<Offer>>;
+  deleteOffer: (id: string) => Promise<AdminApiResponse<{ id: string }>>;
+  updateOrderStatus: (id: string, status: Order['status']) => Promise<boolean>;
+  updateOrder: (id: string, order: Partial<Order>) => Promise<AdminApiResponse<Order>>;
+  deleteOrder: (id: string) => Promise<AdminApiResponse<{ id: string }>>;
+  addTestimonial: (testimonial: Omit<Testimonial, 'id' | 'created_at'>) => Promise<AdminApiResponse<Testimonial>>;
+  updateTestimonial: (id: string, testimonial: Partial<Testimonial>) => Promise<AdminApiResponse<Testimonial>>;
+  deleteTestimonial: (id: string) => Promise<AdminApiResponse<{ id: string }>>;
+  deleteUpload: (id: string) => Promise<AdminApiResponse<{ id: string }>>;
+  addCategory: (category: Omit<Category, 'id' | 'created_at'>) => Promise<AdminApiResponse<Category>>;
+  updateCategory: (id: string, category: Category) => Promise<AdminApiResponse<Category>>;
+  deleteCategory: (id: string) => Promise<AdminApiResponse<{ id: string }>>;
+  addRecipe: (recipe: Partial<Recipe>) => Promise<AdminApiResponse<Recipe>>;
+  updateRecipe: (id: string, recipe: Partial<Recipe>) => Promise<AdminApiResponse<Recipe>>;
+  deleteRecipe: (id: string) => Promise<AdminApiResponse<{ id: string }>>;
   saveRecipeIngredients: (recipe_id: string, ingredients: { product_id: string; quantity: number; uom: string; price_override?: number }[]) => Promise<void>;
-  addService: (service: Partial<Service>) => Promise<void>;
-  updateService: (id: string, service: Partial<Service>) => Promise<void>;
-  deleteService: (id: string) => Promise<void>;
-  updateBookingStatus: (id: string, status: Booking['status']) => Promise<void>;
+  addService: (service: Partial<Service>) => Promise<AdminApiResponse<Service>>;
+  updateService: (id: string, service: Partial<Service>) => Promise<AdminApiResponse<Service>>;
+  deleteService: (id: string) => Promise<AdminApiResponse<{ id: string }>>;
+  updateBookingStatus: (id: string, status: Booking['status']) => Promise<AdminApiResponse<Booking>>;
+  addCoupon: (coupon: Omit<Coupon, 'id' | 'created_at' | 'used_count'>) => Promise<AdminApiResponse<Coupon>>;
+  updateCoupon: (id: string, coupon: Partial<Coupon>) => Promise<AdminApiResponse<Coupon>>;
+  deleteCoupon: (id: string) => Promise<AdminApiResponse<{ id: string }>>;
+  updateSubscriptionStatus: (id: string, status: SubscriptionStatus) => Promise<AdminApiResponse<Subscription>>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [experiencePage, setExperiencePage] = useState(0);
+  const [hasMoreExperiences, setHasMoreExperiences] = useState(true);
+  
   const [offers, setOffers] = useState<Offer[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
@@ -62,6 +76,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
 
@@ -70,8 +86,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       // Fetch all data from server
-      const [serverExperiences, serverOffers, serverOrders, serverTestimonials, serverUploads, serverCategories, serverRecipes, serverServices, serverBookings] = await Promise.all([
-        experiencesApi.getAll(),
+      const [
+        serverExperiences, 
+        serverOffers, 
+        serverOrders, 
+        serverTestimonials, 
+        serverUploads, 
+        serverCategories, 
+        serverRecipes, 
+        serverServices, 
+        serverBookings,
+        serverCoupons,
+        serverSubscriptions
+      ] = await Promise.all([
+        experiencesApi.getAll({ page: 0, limit: 20 }),
         offersApi.getAll(),
         ordersApi.getAll(),
         testimonialsApi.getAll(),
@@ -79,10 +107,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
         categoriesApi.getAll(),
         recipesApi.getAll(),
         servicesApi.getAll(),
-        bookingsApi.getAll()
+        bookingsApi.getAll(),
+        couponsApi.getAll(),
+        subscriptionsApi.getAll()
       ]);
 
       setExperiences(serverExperiences);
+      setExperiencePage(1);
+      setHasMoreExperiences(serverExperiences.length === 20);
+      
       setOffers(serverOffers);
       setOrders(serverOrders);
       setTestimonials(serverTestimonials);
@@ -91,6 +124,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setRecipes(serverRecipes);
       setServices(serverServices);
       setBookings(serverBookings);
+      setCoupons(serverCoupons);
+      setSubscriptions(serverSubscriptions);
 
       setInitialized(true);
     } catch (error) {
@@ -140,8 +175,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [initialized]);
 
   const refreshExperiences = async () => {
-    const data = await experiencesApi.getAll();
+    const data = await experiencesApi.getAll({ page: 0, limit: 20 });
     setExperiences(data);
+    setExperiencePage(1);
+    setHasMoreExperiences(data.length === 20);
+  };
+
+  const loadMoreExperiences = async () => {
+    if (!hasMoreExperiences) return;
+    const newExps = await experiencesApi.getAll({ page: experiencePage, limit: 20 });
+    setExperiences(prev => [...prev, ...newExps]);
+    setExperiencePage(prev => prev + 1);
+    setHasMoreExperiences(newExps.length === 20);
   };
 
   const refreshOffers = async () => {
@@ -184,48 +229,62 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setBookings(data);
   };
 
+  const refreshCoupons = async () => {
+    const data = await couponsApi.getAll();
+    setCoupons(data);
+  };
+
+  const refreshSubscriptions = async () => {
+    const data = await subscriptionsApi.getAll();
+    setSubscriptions(data);
+  };
+
   const addExperience = async (experience: Record<string, any>) => {
-    // NOTE: experiencesApi.add now throws on error — let callers handle it
-    const newExperience = await experiencesApi.add(experience);
-    if (newExperience) {
-      setExperiences(prev => [...prev, newExperience]);
+    const res = await experiencesApi.add(experience);
+    if (res.success && res.data) {
+      setExperiences(prev => [...prev, res.data!]);
     }
+    return res;
   };
 
   const updateExperience = async (id: string, experience: Record<string, any>) => {
-    // NOTE: experiencesApi.update now throws on error — let callers handle it
-    const success = await experiencesApi.update(id, experience);
-    if (success) {
-      setExperiences(prev => prev.map((e) => (e.id === id ? { ...e, ...experience } : e)));
+    const res = await experiencesApi.update(id, experience);
+    if (res.success && res.data) {
+      setExperiences(prev => prev.map((e) => (e.id === id ? res.data! : e)));
     }
+    return res;
   };
 
   const deleteExperience = async (id: string) => {
-    const success = await experiencesApi.delete(id);
-    if (success) {
+    const res = await experiencesApi.delete(id);
+    if (res.success) {
       setExperiences(prev => prev.filter((e) => e.id !== id));
     }
+    return res;
   };
 
   const addOffer = async (offer: Omit<Offer, 'id' | 'created_at'>) => {
-    const newOffer = await offersApi.add(offer);
-    if (newOffer) {
-      setOffers(prev => [...prev, newOffer]);
+    const res = await offersApi.add(offer);
+    if (res.success && res.data) {
+      setOffers(prev => [...prev, res.data!]);
     }
+    return res;
   };
 
-  const updateOffer = async (id: string, offer: Offer) => {
-    const success = await offersApi.update(id, offer);
-    if (success) {
-      setOffers(prev => prev.map((o) => (o.id === id ? offer : o)));
+  const updateOffer = async (id: string, offer: Record<string, any>) => {
+    const res = await offersApi.update(id, offer);
+    if (res.success && res.data) {
+      setOffers(prev => prev.map((o) => (o.id === id ? res.data! : o)));
     }
+    return res;
   };
 
   const deleteOffer = async (id: string) => {
-    const success = await offersApi.delete(id);
-    if (success) {
+    const res = await offersApi.delete(id);
+    if (res.success) {
       setOffers(prev => prev.filter((o) => o.id !== id));
     }
+    return res;
   };
 
   const updateOrderStatus = async (id: string, status: Order['status']) => {
@@ -238,94 +297,103 @@ export function DataProvider({ children }: { children: ReactNode }) {
         logs: [...(o.logs || []), { id: uuidv4(), order_id: id, status, updated_at: new Date().toISOString() }] 
       } : o));
     }
+    return success;
   };
 
   const updateOrder = async (id: string, order: Partial<Order>) => {
-    const success = await ordersApi.update(id, order);
-    if (success) {
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, ...order } : o));
+    const res = await ordersApi.update(id, order);
+    if (res.success && res.data) {
+      setOrders(prev => prev.map(o => o.id === id ? res.data! : o));
     }
+    return res;
   };
 
   const deleteOrder = async (id: string) => {
-    const success = await ordersApi.delete(id);
-    if (success) {
+    const res = await ordersApi.delete(id);
+    if (res.success) {
       setOrders(prev => prev.filter(o => o.id !== id));
     }
+    return res;
   };
 
   const addTestimonial = async (testimonial: Omit<Testimonial, 'id' | 'created_at'>) => {
-    const newTestimonial = await testimonialsApi.add(testimonial);
-    if (newTestimonial) {
-      setTestimonials(prev => [...prev, newTestimonial]);
+    const res = await testimonialsApi.add(testimonial);
+    if (res.success && res.data) {
+      setTestimonials(prev => [...prev, res.data!]);
     }
+    return res;
   };
 
   const updateTestimonial = async (id: string, testimonial: Partial<Testimonial>) => {
-    const success = await testimonialsApi.update(id, testimonial);
-    if (success) {
-      setTestimonials(prev => prev.map(t => t.id === id ? { ...t, ...testimonial } : t));
+    const res = await testimonialsApi.update(id, testimonial);
+    if (res.success && res.data) {
+      setTestimonials(prev => prev.map(t => t.id === id ? res.data! : t));
     }
+    return res;
   };
 
   const deleteTestimonial = async (id: string) => {
-    const success = await testimonialsApi.delete(id);
-    if (success) {
+    const res = await testimonialsApi.delete(id);
+    if (res.success) {
       setTestimonials(prev => prev.filter(t => t.id !== id));
     }
+    return res;
   };
 
   const deleteUpload = async (id: string) => {
-    const success = await uploadsApi.delete(id);
-    if (success) {
+    const res = await uploadsApi.delete(id);
+    if (res.success) {
       setUploads(prev => prev.filter(u => u.id !== id));
     }
+    return res;
   };
 
   const addCategory = async (category: Omit<Category, 'id' | 'created_at'>) => {
-    const newCategory = await categoriesApi.add(category);
-    if (newCategory) {
-      setCategories(prev => [...prev, newCategory]);
+    const res = await categoriesApi.add(category);
+    if (res.success && res.data) {
+      setCategories(prev => [...prev, res.data!]);
     }
+    return res;
   };
 
   const updateCategory = async (id: string, category: Category) => {
-    const success = await categoriesApi.update(id, category);
-    if (success) {
-      setCategories(prev => prev.map((c) => (c.id === id ? category : c)));
+    const res = await categoriesApi.update(id, category);
+    if (res.success && res.data) {
+      setCategories(prev => prev.map((c) => (c.id === id ? res.data! : c)));
     }
+    return res;
   };
 
   const deleteCategory = async (id: string) => {
-    const success = await categoriesApi.delete(id);
-    if (success) {
+    const res = await categoriesApi.delete(id);
+    if (res.success) {
       setCategories(prev => prev.filter((c) => c.id !== id));
     }
+    return res;
   };
 
   const addRecipe = async (recipe: Partial<Recipe>) => {
-    const newRecipe = await recipesApi.upsert(recipe);
-    if (newRecipe) {
-      setRecipes(prev => [newRecipe, ...prev]);
-      return newRecipe;
+    const res = await recipesApi.upsert(recipe);
+    if (res.success && res.data) {
+      setRecipes(prev => [res.data!, ...prev]);
     }
-    return null;
+    return res;
   };
 
   const updateRecipe = async (id: string, recipe: Partial<Recipe>) => {
-    const updated = await recipesApi.upsert({ ...recipe, id });
-    if (updated) {
-      setRecipes(prev => prev.map(r => r.id === id ? updated : r));
-      return updated;
+    const res = await recipesApi.upsert({ ...recipe, id });
+    if (res.success && res.data) {
+      setRecipes(prev => prev.map(r => r.id === id ? res.data! : r));
     }
-    return null;
+    return res;
   };
 
   const deleteRecipe = async (id: string) => {
-    const success = await recipesApi.delete(id);
-    if (success) {
+    const res = await recipesApi.delete(id);
+    if (res.success) {
       setRecipes(prev => prev.filter(r => r.id !== id));
     }
+    return res;
   };
 
   const saveRecipeIngredients = async (recipe_id: string, ingredients: { product_id: string; quantity: number; uom: string; price_override?: number }[]) => {
@@ -342,35 +410,75 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const addService = async (service: Partial<Service>) => {
-    const newService = await servicesApi.upsert(service);
-    if (newService) {
-      setServices(prev => [newService, ...prev]);
+    const res = await servicesApi.upsert(service);
+    if (res.success && res.data) {
+      setServices(prev => [res.data!, ...prev]);
     }
+    return res;
   };
 
   const updateService = async (id: string, service: Partial<Service>) => {
-    const updated = await servicesApi.upsert({ ...service, id });
-    if (updated) {
-      setServices(prev => prev.map(s => s.id === id ? updated : s));
+    const res = await servicesApi.upsert({ ...service, id });
+    if (res.success && res.data) {
+      setServices(prev => prev.map(s => s.id === id ? res.data! : s));
     }
+    return res;
   };
 
   const deleteService = async (id: string) => {
-    const success = await servicesApi.delete(id);
-    if (success) {
+    const res = await servicesApi.delete(id);
+    if (res.success) {
       setServices(prev => prev.filter(s => s.id !== id));
     }
+    return res;
   };
 
   const updateBookingStatus = async (id: string, status: Booking['status']) => {
-    await bookingsApi.updateStatus(id, status);
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
+    const res = await bookingsApi.updateStatus(id, status);
+    if (res.success && res.data) {
+      setBookings(prev => prev.map(b => b.id === id ? res.data! : b));
+    }
+    return res;
+  };
+
+  const addCoupon = async (coupon: Omit<Coupon, 'id' | 'created_at' | 'used_count'>) => {
+    const res = await couponsApi.add(coupon);
+    if (res.success && res.data) {
+      setCoupons(prev => [...prev, res.data!]);
+    }
+    return res;
+  };
+
+  const updateCoupon = async (id: string, coupon: Partial<Coupon>) => {
+    const res = await couponsApi.update(id, coupon);
+    if (res.success && res.data) {
+      setCoupons(prev => prev.map(c => c.id === id ? res.data! : c));
+    }
+    return res;
+  };
+
+  const deleteCoupon = async (id: string) => {
+    const res = await couponsApi.delete(id);
+    if (res.success) {
+      setCoupons(prev => prev.filter(c => c.id !== id));
+    }
+    return res;
+  };
+
+  const updateSubscriptionStatus = async (id: string, status: SubscriptionStatus) => {
+    const res = await subscriptionsApi.updateStatus(id, status);
+    if (res.success && res.data) {
+      setSubscriptions(prev => prev.map(s => s.id === id ? res.data! : s));
+    }
+    return res;
   };
 
   return (
     <DataContext.Provider
       value={{
         experiences,
+        hasMoreExperiences,
+        loadMoreExperiences,
         offers,
         orders,
         testimonials,
@@ -385,6 +493,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         refreshCategories,
         refreshServices,
         refreshBookings,
+        refreshCoupons,
         addExperience,
         updateExperience,
         deleteExperience,
@@ -412,7 +521,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         addService,
         updateService,
         deleteService,
-        updateBookingStatus
+        updateBookingStatus,
+        coupons,
+        addCoupon,
+        updateCoupon,
+        deleteCoupon,
+        subscriptions,
+        refreshSubscriptions,
+        updateSubscriptionStatus
       }}
     >
       {children}

@@ -74,10 +74,14 @@ export const OrderManagement: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to permanently delete this order and all its items?")) {
-      await deleteOrder(id);
-      setSelectedOrder(null);
-      toast.success("Order completely purged");
+    if (window.confirm("Are you sure you want to delete this order?")) {
+      const res = await deleteOrder(id);
+      if (res.success) {
+        setSelectedOrder(null);
+        toast.success("Order deleted successfully");
+      } else {
+        toast.error(res.message || "Failed to delete order");
+      }
     }
   };
 
@@ -407,11 +411,15 @@ export const OrderManagement: React.FC = () => {
                     {Object.keys(statusMap).map((s) => (
                       <button
                         key={s}
-                        onClick={() => {
-                           updateOrderStatus(selectedOrder.id, s as any);
-                           // optimistic update in UI local state
-                           setSelectedOrder({ ...selectedOrder, status: s as any });
-                           toast.success("Order status pushed to log");
+                        onClick={async () => {
+                           const success = await updateOrderStatus(selectedOrder.id, s as any);
+                           if (success) {
+                             // optimistic update in UI local state
+                             setSelectedOrder({ ...selectedOrder, status: s as any });
+                             toast.success("Order status updated");
+                           } else {
+                             toast.error("Failed to update status");
+                           }
                         }}
                         className={cn(
                           "py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border",

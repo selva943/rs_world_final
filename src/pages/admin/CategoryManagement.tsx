@@ -75,18 +75,42 @@ export const CategoryManagement: React.FC = () => {
       } as any;
 
       if (editingCategory) {
-        await updateCategory(editingCategory.id, payload);
-        toast.success('Category updated successfully');
+        const res = await updateCategory(editingCategory.id, payload);
+        if (res.success) {
+          toast.success('Category updated successfully');
+          setIsFormOpen(false);
+        } else {
+          toast.error(res.message || 'Failed to update category');
+        }
       } else {
-        await addCategory(payload);
-        toast.success('Category added successfully');
+        const res = await addCategory(payload);
+        if (res.success) {
+          toast.success('Category added successfully');
+          setIsFormOpen(false);
+        } else {
+          toast.error(res.message || 'Failed to add category');
+        }
       }
-      setIsFormOpen(false);
     } catch (error: any) {
       console.error('Save error:', error);
-      toast.error('Failed to save category');
+      toast.error('An unexpected error occurred while saving');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+    
+    try {
+      const res = await deleteCategory(id);
+      if (res.success) {
+        toast.success(`Category "${name}" deleted`);
+      } else {
+        toast.error(res.message || 'Failed to delete category');
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred');
     }
   };
 
@@ -139,7 +163,7 @@ export const CategoryManagement: React.FC = () => {
                 </Button>
                 <Button 
                   variant="ghost" 
-                  onClick={() => deleteCategory(category.id)}
+                  onClick={() => handleDelete(category.id, category.name)}
                   className="text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl h-11 px-4"
                 >
                   <Trash2 className="w-4 h-4" />

@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
 import { Subscription, SubscriptionStatus } from '@/types/app';
-import { subscriptionService } from '@/lib/services/subscriptionService';
+import { useData } from '@/context/DataContext';
 import { 
   RefreshCw, 
   Search, 
@@ -34,40 +33,27 @@ import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
 export default function SubscriptionAdmin() {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { subscriptions, loading, updateSubscriptionStatus } = useData();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | SubscriptionStatus>('all');
-
-  useEffect(() => {
-    fetchSubscriptions();
-  }, []);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'cancelled'>('all');
 
   const fetchSubscriptions = async () => {
-    setLoading(true);
-    const { data, error } = await (supabase.from('subscriptions') as any)
-      .select('*, product:products(*)')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      toast.error('Failed to fetch subscriptions');
-    } else {
-      setSubscriptions(data || []);
-    }
-    setLoading(false);
+    // Note: useData already loads subscriptions periodically, 
+    // but if we need a manual trigger we can add a refresh flag or use the context method.
+    // For now we'll rely on the context value.
   };
+
 
   const handleStatusUpdate = async (id: string, newStatus: SubscriptionStatus) => {
-    const success = await subscriptionService.updateStatus(id, newStatus);
-    if (success) {
+    const res = await updateSubscriptionStatus(id, newStatus);
+    if (res.success) {
       toast.success(`Subscription ${newStatus} updated`);
-      fetchSubscriptions();
     } else {
-      toast.error('Status update failed');
+      toast.error(res.message || 'Status update failed');
     }
   };
 
-  const filteredSubscriptions = subscriptions.filter(sub => {
+  const filteredSubscriptions = subscriptions.filter((sub: Subscription) => {
     const matchesSearch = 
       sub.user_phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sub.product?.name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -76,15 +62,14 @@ export default function SubscriptionAdmin() {
   });
 
   const stats = useMemo(() => {
-    const active = subscriptions.filter(s => s.status === 'active').length;
+    const active = subscriptions.filter((s: Subscription) => s.status === 'active').length;
     const revenue = subscriptions
-      .filter(s => s.status === 'active')
-      .reduce((sum, s) => sum + (s.total_per_delivery || 0), 0);
+      .filter((s: Subscription) => s.status === 'active')
+      .reduce((sum: number, s: Subscription) => sum + (s.total_per_delivery || 0), 0);
     
     return {
       total: subscriptions.length,
       active,
-      paused: subscriptions.filter(s => s.status === 'paused').length,
       revenue
     };
   }, [subscriptions]);
@@ -123,13 +108,6 @@ export default function SubscriptionAdmin() {
           color="emerald"
         />
         <StatsCard 
-          label="Paused Plans" 
-          value={stats.paused} 
-          icon={<PauseCircle className="w-5 h-5 text-amber-500" />} 
-          trend="0%"
-          color="amber"
-        />
-        <StatsCard 
           label="Est. Monthly Rev" 
           value={`₹${stats.revenue * 30}`} 
           icon={<TrendingUp className="w-5 h-5 text-indigo-500" />} 
@@ -151,7 +129,7 @@ export default function SubscriptionAdmin() {
             />
           </div>
           <div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl">
-            {['all', 'active', 'paused', 'cancelled'].map((tab) => (
+            {['all', 'active', 'cancelled'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setStatusFilter(tab as any)}
@@ -186,7 +164,7 @@ export default function SubscriptionAdmin() {
                 <TableRow><TableCell colSpan={6} className="text-center py-20 font-bold text-slate-400 italic">Curating data...</TableCell></TableRow>
               ) : filteredSubscriptions.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-20 font-bold text-slate-400 italic">No matches found</TableCell></TableRow>
-              ) : filteredSubscriptions.map((sub) => (
+              ) : filteredSubscriptions.map((sub: Subscription) => (
                 <TableRow key={sub.id} className="hover:bg-slate-50 transition-colors">
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -242,28 +220,9 @@ export default function SubscriptionAdmin() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      {sub.status === 'active' ? (
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="h-8 w-8 p-0 rounded-lg border-2"
-                          onClick={() => handleStatusUpdate(sub.id, 'paused')}
-                        >
-                          <PauseCircle className="w-4 h-4 text-amber-500" />
-                        </Button>
-                      ) : sub.status === 'paused' ? (
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="h-8 w-8 p-0 rounded-lg border-2"
-                          onClick={() => handleStatusUpdate(sub.id, 'active')}
-                        >
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                        </Button>
-                      ) : null}
-                      <Button size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-2">
-                        <MoreHorizontal className="w-4 h-4 text-slate-400" />
-                      </Button>
+                       <Button size="sm" variant="outline" className="h-8 w-8 p-0 rounded-lg border-2">
+                         <MoreHorizontal className="w-4 h-4 text-slate-400" />
+                       </Button>
                     </div>
                   </TableCell>
                 </TableRow>

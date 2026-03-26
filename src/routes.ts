@@ -14,6 +14,7 @@ import SubscriptionAdmin from "@/pages/admin/SubscriptionAdmin";
 import { RecipeDiscovery } from "@/pages/RecipeDiscovery";
 import { MyOrders } from "@/pages/MyOrders";
 import Checkout from "@/pages/Checkout";
+import PromotionManagement from "./pages/admin/PromotionManagement";
 
 export const router = createBrowserRouter([
   {
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
     Component: Admin,
     children: [
       { path: "subscriptions", Component: SubscriptionAdmin },
+      { path: "promotions", Component: PromotionManagement },
     ]
   },
 ]);

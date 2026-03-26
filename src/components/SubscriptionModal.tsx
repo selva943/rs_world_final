@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { 
   X, 
   Calendar, 
@@ -11,6 +12,7 @@ import {
   Sparkles,
   Clock
 } from 'lucide-react';
+import { OTPModal } from './OTPModal';
 import { Experience } from '@/types/app';
 import { Button } from '@/components/ui/button';
 import { subscriptionService } from '@/lib/services/subscriptionService';
@@ -26,16 +28,17 @@ interface SubscriptionModalProps {
 }
 
 const WEEK_DAYS = [
-  { label: 'Sun', value: 0 },
-  { label: 'Mon', value: 1 },
-  { label: 'Tue', value: 2 },
-  { label: 'Wed', value: 3 },
-  { label: 'Thu', value: 4 },
-  { label: 'Fri', value: 5 },
-  { label: 'Sat', value: 6 }
+  { label: 'sun', value: 0 },
+  { label: 'mon', value: 1 },
+  { label: 'tue', value: 2 },
+  { label: 'wed', value: 3 },
+  { label: 'thu', value: 4 },
+  { label: 'fri', value: 5 },
+  { label: 'sat', value: 6 }
 ];
 
 export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModalProps) {
+  const { t } = useTranslation();
   const { user } = useAuth();
 
   // Only show frequencies the product supports
@@ -49,6 +52,7 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [startDate, setStartDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Reset frequency when product changes
   const [prevProductId, setPrevProductId] = useState(product.id);
@@ -69,13 +73,15 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
   };
 
   const handleSubscribe = async () => {
-    if (!user) {
-      toast.error('Please login to subscribe');
+    const isSubscription = product.type?.toLowerCase() === "subscription" || product.is_subscription_available;
+    if (isSubscription && !user) {
+      console.log("[SubscriptionModal] Triggering OTP for product:", product.name);
+      setShowAuthModal(true);
       return;
     }
 
     if (frequency === 'weekly' && selectedDays.length === 0) {
-      toast.error('Please select at least one day for weekly delivery');
+      toast.error(t('error_select_days'));
       return;
     }
 
@@ -99,13 +105,14 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
 
       const result = await subscriptionService.create(payload as any);
       if (result) {
-        toast.success(`Subscribed to ${product.name} successfully!`);
+        toast.success(t('subscription_success_toast'));
         onClose();
-      } else {
+      }
+ else {
         throw new Error('Failed to create subscription');
       }
     } catch (error) {
-      toast.error('Could not create subscription. Please try again.');
+      toast.error(t('subscription_error_toast'));
     } finally {
       setIsSubmitting(false);
     }
@@ -128,10 +135,10 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="relative w-full max-w-xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+          className="relative w-full max-w-xl bg-white rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[100vh] md:max-h-[90vh]"
         >
           {/* Header */}
-          <div className="relative h-48 bg-pb-green-deep overflow-hidden">
+          <div className="relative h-40 md:h-48 bg-pb-green-deep shrink-0 overflow-hidden">
             <div className="absolute inset-0 opacity-20">
                <img src={product.image} className="w-full h-full object-cover blur-sm scale-110" alt="" />
                <div className="absolute inset-0 bg-gradient-to-t from-pb-green-deep via-transparent to-transparent" />
@@ -145,26 +152,26 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
             </button>
 
             <div className="absolute bottom-6 left-8 flex items-end gap-6">
-              <div className="w-20 h-20 bg-white rounded-2xl p-2 shadow-xl overflow-hidden">
+              <div className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl p-2 shadow-xl overflow-hidden shrink-0">
                  <img src={product.image} className="w-full h-full object-cover rounded-xl" alt={product.name} />
               </div>
               <div className="pb-1">
-                <h3 className="text-2xl font-black text-white leading-tight">{product.name}</h3>
-                <p className="text-emerald-300 font-bold text-sm tracking-wide uppercase italic">Subscription Plan</p>
+                <h3 className="text-xl md:text-2xl font-black text-white leading-tight">{product.name}</h3>
+                <p className="text-emerald-300 font-bold text-xs md:text-sm tracking-wide uppercase italic">{t('subscription_plan')}</p>
               </div>
             </div>
           </div>
 
-          <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+          <div className="p-6 md:p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
             {/* Frequency Selection */}
             <div className="space-y-4">
-               <Label label="How often do you need it?" sub="Select your delivery cycle" />
+               <Label label={t('how_often_label')} sub={t('select_delivery_cycle')} />
                <div className={`grid gap-3 ${availableFrequencies.length <= 2 ? 'grid-cols-2' : availableFrequencies.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'}`}>
                   {[
-                    { id: 'daily' as const, icon: <Zap className="w-4 h-4" />, label: 'Daily', desc: 'Every day' },
-                    { id: 'alternate' as const, icon: <Clock className="w-4 h-4" />, label: 'Alternate', desc: 'Every 2 days' },
-                    { id: 'weekly' as const, icon: <Calendar className="w-4 h-4" />, label: 'Weekly', desc: 'Select days' },
-                    { id: 'monthly' as const, icon: <Package className="w-4 h-4" />, label: 'Monthly', desc: 'Once a month' }
+                    { id: 'daily' as const, icon: <Zap className="w-4 h-4" />, label: t('daily_frequency'), desc: t('every_day') },
+                    { id: 'alternate' as const, icon: <Clock className="w-4 h-4" />, label: t('alternate_frequency'), desc: t('every_two_days') },
+                    { id: 'weekly' as const, icon: <Calendar className="w-4 h-4" />, label: t('weekly_frequency'), desc: t('select_days') },
+                    { id: 'monthly' as const, icon: <Package className="w-4 h-4" />, label: t('monthly_frequency'), desc: t('once_a_month') }
                   ].filter(item => availableFrequencies.includes(item.id)).map((item) => (
                     <button
                       key={item.id}
@@ -192,7 +199,7 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
                 animate={{ height: 'auto', opacity: 1 }}
                 className="space-y-4 overflow-hidden"
               >
-                <Label label="On which days?" sub="Pick one or more" />
+                <Label label={t('on_which_days_label')} sub={t('pick_one_or_more')} />
                 <div className="flex flex-wrap gap-2">
                    {WEEK_DAYS.map((day) => (
                      <button
@@ -205,17 +212,17 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
                             : "border-slate-100 text-slate-400 hover:border-slate-300"
                         )}
                      >
-                        {day.label}
+                        {t(day.label)}
                      </button>
                    ))}
                 </div>
               </motion.div>
             )}
 
-            <div className="grid grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                {/* Quantity Selector */}
                <div className="space-y-4">
-                  <Label label="Quantity" sub={`Per delivery (${product.unit || 'unit'})`} />
+                  <Label label={t('quantity_label')} sub={t('per_delivery_unit', { unit: product.unit || t('unit') })} />
                   <div className="flex items-center gap-4 bg-slate-50 rounded-2xl p-2 border border-slate-100">
                      <button 
                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -235,7 +242,7 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
 
                {/* Start Date */}
                <div className="space-y-4">
-                  <Label label="Start Date" sub="When to begin?" />
+                  <Label label={t('start_date_label')} sub={t('when_to_begin')} />
                   <div className="relative">
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
@@ -252,15 +259,15 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
             {/* Summary Card */}
             <div className="bg-pb-green-deep/5 rounded-3xl p-6 space-y-4 border border-pb-green-deep/10">
                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Price / Delivery</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('total_price_per_delivery')}</span>
                   <span className="text-xl font-black text-pb-green-deep">₹{(product.discount_price || product.price) * quantity}</span>
                </div>
                <div className="flex justify-between items-center pt-4 border-t border-pb-green-deep/10">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                     <Clock className="w-4 h-4" /> Next Delivery
+                     <Clock className="w-4 h-4" /> {t('next_delivery')}
                   </span>
                   <span className="text-sm font-bold text-slate-700">
-                    {nextDeliveryDate ? format(new Date(nextDeliveryDate), 'EEE, MMM dd, yyyy') : 'Calculating...'}
+                    {nextDeliveryDate ? format(new Date(nextDeliveryDate), 'EEE, MMM dd, yyyy') : t('calculating')}
                   </span>
                </div>
             </div>
@@ -268,31 +275,42 @@ export function SubscriptionModal({ product, isOpen, onClose }: SubscriptionModa
             <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 rounded-2xl text-amber-700 border border-amber-100/50">
                <Info className="w-4 h-4 shrink-0" />
                <p className="text-[10px] font-bold leading-normal italic">
-                 Calculated next delivery based on {frequency} schedule starting from {format(new Date(startDate), 'MMM dd')}.
+                 {t('calculated_next_delivery_info', { frequency: t(frequency), startDate: format(new Date(startDate), 'MMM dd') })}
                </p>
             </div>
           </div>
 
-          {/* Action Footer */}
-          <div className="p-8 bg-slate-50/50 flex gap-4">
+          {/* Action Footer (Sticky) */}
+          <div className="p-6 md:p-8 bg-white border-t border-slate-100 flex gap-4 shrink-0 z-10 sticky bottom-0 shadow-[0_-10px_40px_rgba(0,0,0,0.04)]">
             <Button 
                onClick={onClose}
                variant="outline" 
-               className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest text-xs border-2"
+               className="flex-1 h-12 md:h-14 rounded-2xl font-black uppercase tracking-widest text-xs border-2"
             >
-               Cancel
+               {t('cancel_button')}
             </Button>
             <Button 
               onClick={handleSubscribe}
               disabled={isSubmitting}
-              className="flex-[2] h-14 bg-pb-green-deep hover:bg-emerald-800 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-emerald-900/20 gap-3"
+              className="flex-[2] h-12 md:h-14 bg-pb-green-deep hover:bg-emerald-800 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-emerald-900/20 gap-3"
             >
-              {isSubmitting ? 'Finalizing...' : (
-                <><Sparkles className="w-4 h-4" /> Confirm Subscription</>
+              {isSubmitting ? (
+                <><Sparkles className="w-4 h-4 animae-pulse" /> {t('finalizing_status')}</>
+              ) : (
+                <><Sparkles className="w-4 h-4" /> {t('confirm_subscription_button')}</>
               )}
             </Button>
           </div>
         </motion.div>
+
+        <OTPModal 
+          isOpen={showAuthModal} 
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={() => {
+            setShowAuthModal(false);
+            handleSubscribe();
+          }}
+        />
       </div>
     </AnimatePresence>
   );

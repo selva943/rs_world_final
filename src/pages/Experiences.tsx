@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ExperienceCard } from '@/components/ExperienceCard';
 import { CategoryBar } from '@/components/CategoryBar';
@@ -21,8 +21,10 @@ import { useCart } from '@/context/CartContext';
 import { safeString, cn } from '@/lib/utils';
 import { normalizeItem } from '@/lib/dataNormalization';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTranslation } from 'react-i18next';
 export function Experiences() {
-  const { experiences, services, categories, loading } = useData();
+  const { t } = useTranslation();
+  const { experiences, services, categories, loading, hasMoreExperiences, loadMoreExperiences } = useData();
   const { items, totalAmount } = useCart();
   const location = useLocation();
   const navigate = useNavigate();
@@ -58,6 +60,26 @@ export function Experiences() {
       setSelectedCategoryId(relevantCategories[0].id);
     }
   }, [relevantCategories, selectedCategoryId]);
+
+  const observerTarget = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMoreExperiences) {
+          loadMoreExperiences();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMoreExperiences, loadMoreExperiences]);
+
 
   const filteredProducts = useMemo(() => {
     return allItems.map(normalizeItem).filter((item: any) => {
@@ -112,11 +134,11 @@ export function Experiences() {
 
   const getPageTitle = () => {
     const path = location.pathname;
-    if (path === '/deliverables') return 'Fresh Groceries';
-    if (path === '/recipe-kits') return 'Chef Recipe Kits';
-    if (path === '/services') return 'Home Services';
-    if (path === '/subscription') return 'Subscriptions';
-    return 'Marketplace';
+    if (path === '/deliverables') return t('fresh_groceries');
+    if (path === '/recipe-kits') return t('chef_recipe_kits');
+    if (path === '/services') return t('home_services');
+    if (path === '/subscription') return t('subscriptions');
+    return t('marketplace');
   };
 
   return (
@@ -132,13 +154,13 @@ export function Experiences() {
                 className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 bg-emerald-50 rounded-full text-pb-green-deep text-[10px] font-black tracking-widest uppercase border border-emerald-100"
               >
                 <Sparkles className="w-3 h-3" />
-                Purely Local • Farm Fresh
+                {t('purely_local')}
               </motion.div>
               <h1 className="text-6xl md:text-8xl font-playfair font-black text-pb-green-deep tracking-tighter mb-6">
                 {getPageTitle()}
               </h1>
               <p className="text-xl text-slate-500 font-medium leading-relaxed">
-                From fixing leaks to deep cleaning your home, we bring skilled, trusted service professionals from your neighborhood right to your doorstep.
+                {location.pathname === '/services' ? t('service_hero_desc') : t('hero_desc')}
               </p>
             </div>
 
@@ -147,7 +169,7 @@ export function Experiences() {
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-pb-green-deep transition-colors" />
                 <Input
                   type="text"
-                  placeholder="What are you craving today?"
+                  placeholder={t('search_placeholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-16 bg-slate-50 border-none text-lg rounded-[2rem] h-14 focus:ring-2 focus:ring-pb-green-deep/10 shadow-inner"
@@ -176,9 +198,9 @@ export function Experiences() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-slate-800">
-                    {relevantCategories.find(c => c.id === selectedCategoryId)?.name || 'All Items'}
+                    {relevantCategories.find(c => c.id === selectedCategoryId)?.name || t('all_items')}
                   </h2>
-                  <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">{filteredProducts.length} Items Available</p>
+                  <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">{filteredProducts.length} {t('items_available_count')}</p>
                 </div>
               </div>
             </div>
@@ -198,9 +220,9 @@ export function Experiences() {
                 <div className="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8">
                   <ShoppingBasket className="w-16 h-16 text-slate-200" />
                 </div>
-                <h3 className="text-4xl font-playfair font-black text-pb-green-deep mb-4">Cart's Still Empty!</h3>
+                <h3 className="text-4xl font-playfair font-black text-pb-green-deep mb-4">{t('cart_empty_title')}</h3>
                 <p className="text-slate-400 font-bold uppercase tracking-widest text-sm max-w-sm mx-auto">
-                  We couldn't find any fresh {relevantCategories.find(c => c.id === selectedCategoryId)?.name} matching your search.
+                  {t('cart_empty_desc')}
                 </p>
                 <Button
                   variant="ghost"
@@ -208,12 +230,20 @@ export function Experiences() {
                   onClick={() => { setSelectedCategoryId(relevantCategories[0]?.id); setSearchQuery(''); }}
                   className="text-pb-green-deep mt-10 font-black uppercase tracking-widest text-xs rounded-2xl border border-emerald-50"
                 >
-                  Clear Selection
+                  {t('clear_selection')}
                 </Button>
               </motion.div>
             )}
+
+            {/* Infinite Scroll Sentinel */}
+            {hasMoreExperiences && filteredProducts.length > 0 && (
+              <div ref={observerTarget} className="w-full h-20 flex items-center justify-center mt-8">
+                <div className="w-8 h-8 border-4 border-pb-green-deep border-t-transparent rounded-full animate-spin opacity-50"></div>
+              </div>
+            )}
           </main>
         </div>
+
       </div>
 
       {/* Mobile Sticky Cart Preview */}
@@ -234,7 +264,7 @@ export function Experiences() {
                   </span>
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Your Basket</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">{t('your_basket')}</p>
                   <p className="text-lg font-bold">₹{totalAmount.toFixed(2)}</p>
                 </div>
               </div>
@@ -242,7 +272,7 @@ export function Experiences() {
                 onClick={() => navigate('/checkout')}
                 className="bg-[#FFF59D] text-pb-green-deep h-12 rounded-xl px-6 font-black uppercase tracking-widest text-xs"
               >
-                Checkout <ChevronRight className="w-4 h-4 ml-1" />
+                {t('checkout')} <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </motion.div>

@@ -1,5 +1,6 @@
-import { Experience, Order, OrderItem, OrderLog, Testimonial, Upload, Offer, Category, Recipe, RecipeIngredient, Subscription, SubscriptionStatus, Booking, BookingStatus, Service } from '@/types/app';
+import { Experience, Order, OrderItem, OrderLog, Testimonial, Upload, Offer, Category, Recipe, RecipeIngredient, Subscription, SubscriptionStatus, Booking, BookingStatus, Service, Coupon, AdminApiResponse } from '@/types/app';
 import { supabase, db } from '@/lib/supabase';
+export { supabase, db };
 import { v4 as uuidv4 } from 'uuid';
 
 // Helper function to map category with fallbacks
@@ -13,6 +14,38 @@ export function mapCategory(item: any): string {
   if (title.includes('plumbing') || title.includes('cleaning') || title.includes('repair')) return 'services';
 
   return 'vegetables'; // default
+}
+
+/**
+ * Standardizes API responses across the system.
+ */
+async function handleApiResponse<T>(
+  promise: PromiseLike<any>,
+  successMessage: string,
+  errorPrefix: string,
+  mapper?: (data: any) => T
+): Promise<AdminApiResponse<T>> {
+  try {
+    const { data, error } = await promise;
+    if (error) {
+      console.error(`${errorPrefix}:`, error.message);
+      return { success: false, message: `${errorPrefix}: ${error.message}`, error: error.message };
+    }
+    
+    let resultData = data;
+    if (mapper && data) {
+      resultData = Array.isArray(data) ? data.map(mapper) : mapper(data);
+    }
+
+    return {
+      success: true,
+      message: successMessage,
+      data: resultData
+    };
+  } catch (err: any) {
+    console.error(`Unexpected ${errorPrefix}:`, err);
+    return { success: false, message: `An unexpected error occurred: ${err.message}`, error: err.message };
+  }
 }
 
 // ========== EXPERIENCES (PRODUCTS) API ==========
@@ -89,11 +122,40 @@ function buildProductPayload(data: Record<string, any>): Record<string, any> {
 }
 
 export const experiencesApi = {
-  async getAll(): Promise<Experience[]> {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('name');
+  async getAll(options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    type?: string;
+    category?: string;
+    is_featured?: boolean;
+  }): Promise<Experience[]> {
+    let query = supabase.from('products').select('*').eq('is_deleted', false).order('name');
+
+    if (options?.search) {
+      query = query.ilike('name', `%${options.search}%`);
+    }
+
+    if (options?.type) {
+      query = query.eq('type', options.type);
+    }
+
+    if (options?.category) {
+      query = query.ilike('category', options.category);
+    }
+    
+    if (options?.is_featured) {
+      query = query.eq('is_featured', true);
+    }
+
+    if (options?.page !== undefined && options?.limit !== undefined) {
+      const from = options.page * options.limit;
+      const to = from + options.limit - 1;
+      query = query.range(from, to);
+    }
+
+    const { data, error } = await query;
+
     if (error) {
       console.error('[experiencesApi.getAll] Error:', error.message);
       return [];
@@ -101,42 +163,32 @@ export const experiencesApi = {
     return (data || []).map(dbToExperience);
   },
 
-  async add(experience: Record<string, any>): Promise<Experience | null> {
+  async add(experience: Record<string, any>): Promise<AdminApiResponse<Experience>> {
     const payload = buildProductPayload(experience);
-    console.log('[experiencesApi.add] Cleaned payload:', payload);
-    const { data, error } = await db.from('products')
-      .insert(payload)
-      .select()
-      .single();
-    if (error) {
-      console.error('[experiencesApi.add] Insert error:', error.message, error.details, error.hint);
-      throw new Error(error.message);
-    }
-    return data ? dbToExperience(data) : null;
+    return handleApiResponse(
+      db.from('products').insert(payload).select().single(),
+      `Product "${experience.name}" added successfully`,
+      'Failed to add product',
+      dbToExperience
+    );
   },
 
-  async update(id: string, experience: Record<string, any>): Promise<boolean> {
+  async update(id: string, experience: Record<string, any>): Promise<AdminApiResponse<Experience>> {
     const payload = buildProductPayload(experience);
-    console.log('[experiencesApi.update] Cleaned payload:', payload);
-    const { error } = await db.from('products')
-      .update(payload)
-      .eq('id', id);
-    if (error) {
-      console.error('[experiencesApi.update] Update error:', error.message, error.details);
-      throw new Error(error.message);
-    }
-    return true;
+    return handleApiResponse(
+      db.from('products').update(payload).eq('id', id).select().single(),
+      `Product "${experience.name}" updated successfully`,
+      'Failed to update product',
+      dbToExperience
+    );
   },
 
-  async delete(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id);
-    if (error) {
-      console.error('[experiencesApi.delete] Error:', error.message);
-    }
-    return !error;
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> {
+    return handleApiResponse(
+      db.from('products').update({ is_deleted: true }).eq('id', id).select('id').single(),
+      'Product deleted successfully',
+      'Failed to delete product'
+    );
   },
 
   async bulkUpdateStock(updates: { id: string, stock: number }[]): Promise<boolean> {
@@ -161,23 +213,66 @@ export const experiencesApi = {
 };
 
 // ========== OFFERS API ==========
+
+/**
+ * Whitelist ONLY real DB columns for the offers table.
+ * Strips UI-only fields or legacy leftovers.
+ */
+function buildOfferPayload(data: Record<string, any>): Record<string, any> {
+  const allowed = [
+    'title', 'name', 'slug', 'description', 
+    'logic_type', 'offer_type', 'discount_type', 'discount_value',
+    'min_quantity', 'min_order_amount', 'max_discount',
+    'buy_quantity', 'get_quantity', 'target_audience',
+    'total_usage_limit', 'per_user_limit', 'priority',
+    'allow_with_coupon', 'product_id', 'category_id',
+    'start_date', 'end_date', 'banner_image', 'badge',
+    'is_active', 'is_featured', 'is_deleted'
+  ];
+  const clean: Record<string, any> = {};
+  for (const key of allowed) {
+    if (data[key] !== undefined) {
+      // Convert empty strings to null for reference fields to avoid UUID syntax errors
+      if ((key === 'product_id' || key === 'category_id') && data[key] === '') {
+        clean[key] = null;
+      } else {
+        clean[key] = data[key];
+      }
+    }
+  }
+  return clean;
+}
+
 function dbToOffer(row: any): Offer {
   return {
     id: row.id,
+    title: row.title || row.name,
     name: row.name,
     slug: row.slug,
     description: row.description || '',
+    logic_type: row.logic_type,
     offer_type: row.offer_type,
     discount_type: row.discount_type,
     discount_value: Number(row.discount_value) || 0,
     min_quantity: row.min_quantity || 1,
+    min_order_amount: Number(row.min_order_amount) || 0,
     max_discount: row.max_discount,
+    buy_quantity: row.buy_quantity,
+    get_quantity: row.get_quantity,
+    target_audience: row.target_audience,
+    total_usage_limit: row.total_usage_limit,
+    per_user_limit: row.per_user_limit || 1,
+    priority: row.priority || 0,
+    allow_with_coupon: row.allow_with_coupon || false,
+    product_id: row.product_id,
+    category_id: row.category_id,
     start_date: row.start_date,
     end_date: row.end_date,
     banner_image: row.banner_image || '',
     badge: row.badge || '',
-    is_active: row.is_active ?? true,
+    is_active: (row.is_active ?? row.status === 'active'),
     is_featured: row.is_featured || false,
+    is_deleted: row.is_deleted || false,
     created_at: row.created_at
   };
 }
@@ -197,6 +292,7 @@ export const offersApi = {
     const { data, error } = await supabase
       .from('offers')
       .select('*')
+      .eq('is_deleted', false)
       .eq('is_active', true)
       .or(`start_date.is.null,start_date.lte.${now}`)
       .or(`end_date.is.null,end_date.gte.${now}`)
@@ -205,30 +301,188 @@ export const offersApi = {
     return (data || []).map(dbToOffer);
   },
 
-  async add(offer: Omit<Offer, 'id' | 'created_at'>): Promise<Offer | null> {
-    const { data, error } = await db.from('offers').insert(offer).select().single();
-    if (error) {
-      console.error('Add offer error:', error);
-      return null;
-    }
-    return data ? dbToOffer(data) : null;
+  async add(offer: Record<string, any>): Promise<AdminApiResponse<Offer>> {
+    const payload = buildOfferPayload(offer);
+    return handleApiResponse(
+      db.from('offers').insert(payload).select().single(),
+      `Offer "${offer.title || offer.name}" created successfully`,
+      'Failed to create offer',
+      dbToOffer
+    );
   },
 
-  async update(id: string, offer: Partial<Offer>): Promise<boolean> {
-    const { error } = await db.from('offers').update(offer).eq('id', id);
-    if (error) {
-      console.error('Update offer error:', error);
-      return false;
+  async update(id: string, offer: Record<string, any>): Promise<AdminApiResponse<Offer>> {
+    const payload = buildOfferPayload(offer);
+    return handleApiResponse(
+      db.from('offers').update(payload).eq('id', id).select().single(),
+      `Offer updated successfully`,
+      'Failed to update offer',
+      dbToOffer
+    );
+  },
+
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> {
+    return handleApiResponse(
+      db.from('offers').update({ is_deleted: true }).eq('id', id).select('id').single(),
+      'Offer deleted successfully',
+      'Failed to delete offer'
+    );
+  },
+
+  async getBestOffer(cartTotal: number, categorySubtotals: Record<string, number>, items: any[] = []): Promise<Offer | null> {
+    const activeOffers = await this.getActive();
+    
+    let bestOffer: Offer | null = null;
+    let maxSavings = 0;
+
+    for (const offer of activeOffers) {
+      // 1. Basic Constraints
+      if (offer.min_order_amount && cartTotal < offer.min_order_amount) continue;
+      
+      // 2. Product-specific constraints (if any)
+      if (offer.offer_type === 'product' && offer.product_id) {
+        const item = items.find(i => (i.product_id || i.id) === offer.product_id);
+        if (!item) continue;
+        if (offer.min_quantity && item.quantity < offer.min_quantity) continue;
+      } else {
+        // Global/Category min quantity (total items in cart)
+        const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
+        if (offer.min_quantity && totalItems < offer.min_quantity) continue;
+      }
+
+      // 3. Calculate Savings
+      let savings = 0;
+      if (offer.logic_type === 'percentage') {
+        const applicableTotal = offer.offer_type === 'product' && offer.product_id
+          ? (items.find(i => (i.product_id || i.id) === offer.product_id)?.price || 0) * (items.find(i => (i.product_id || i.id) === offer.product_id)?.quantity || 0)
+          : (offer.category_id ? (categorySubtotals[offer.category_id] || 0) : cartTotal);
+        
+        savings = (applicableTotal * offer.discount_value) / 100;
+        if (offer.max_discount) savings = Math.min(savings, offer.max_discount);
+      } else if (offer.logic_type === 'flat') {
+        savings = offer.discount_value;
+      } else if (offer.logic_type === 'free_delivery') {
+        savings = 40;
+      }
+
+      if (savings > maxSavings) {
+        maxSavings = savings;
+        bestOffer = offer;
+      }
     }
+
+    return bestOffer;
+  }
+};
+
+// ========== COUPONS API ==========
+const dbToCoupon = (row: any): Coupon => ({
+  id: row.id,
+  code: row.code,
+  type: row.type,
+  value: Number(row.value) || 0,
+  min_order_amount: Number(row.min_order_amount) || 0,
+  max_discount: row.max_discount,
+  usage_limit: row.usage_limit,
+  used_count: row.used_count || 0,
+  per_user_limit: row.per_user_limit || 1,
+  valid_from: row.valid_from,
+  valid_to: row.valid_to,
+  is_active: row.is_active ?? true,
+  created_at: row.created_at
+});
+
+export const couponsApi = {
+  async getAll(): Promise<Coupon[]> {
+    const { data, error } = await supabase
+      .from('coupons')
+      .select('*')
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false });
+    if (error) return [];
+    return (data || []).map(dbToCoupon);
+  },
+
+  async getByCode(code: string): Promise<Coupon | null> {
+    const { data, error } = await supabase
+      .from('coupons')
+      .select('*')
+      .eq('code', code.toUpperCase())
+      .single();
+    if (error) return null;
+    return dbToCoupon(data);
+  },
+
+  async validate(code: string, userId: string | undefined, cartTotal: number): Promise<{ valid: boolean; message?: string; coupon?: Coupon }> {
+    const coupon = await this.getByCode(code);
+    if (!coupon) return { valid: false, message: 'Invalid coupon code' };
+    if (!coupon.is_active) return { valid: false, message: 'This coupon is no longer active' };
+
+    const now = new Date();
+    if (new Date(coupon.valid_from) > now) return { valid: false, message: 'Coupon not yet valid' };
+    if (coupon.valid_to && new Date(coupon.valid_to) < now) return { valid: false, message: 'Coupon has expired' };
+
+    if (cartTotal < coupon.min_order_amount) {
+      return { valid: false, message: `Minimum order of ₹${coupon.min_order_amount} required` };
+    }
+
+    if (coupon.usage_limit && coupon.used_count >= coupon.usage_limit) {
+      return { valid: false, message: 'Coupon usage limit reached' };
+    }
+
+    if (userId) {
+      const { count } = await supabase
+        .from('coupon_usage')
+        .select('*', { count: 'exact', head: true })
+        .eq('coupon_id', coupon.id)
+        .eq('user_id', userId);
+      
+      if (count !== null && count >= coupon.per_user_limit) {
+        return { valid: false, message: 'You have already used this coupon' };
+      }
+    }
+
+    return { valid: true, coupon };
+  },
+
+  async recordUsage(couponId: string, userId: string, orderId?: string): Promise<boolean> {
+    // 1. Record usage
+    const { error: usageError } = await db.from('coupon_usage').insert({
+      coupon_id: couponId,
+      user_id: userId,
+      order_id: orderId
+    });
+    if (usageError) return false;
+
+    // 2. Increment used_count
+    await db.rpc('increment_coupon_usage', { coupon_id: couponId });
     return true;
   },
 
-  async delete(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('offers')
-      .delete()
-      .eq('id', id);
-    return !error;
+  async add(coupon: Record<string, any>): Promise<AdminApiResponse<Coupon>> {
+    return handleApiResponse(
+      db.from('coupons').insert(coupon).select().single(),
+      `Coupon "${coupon.code}" created successfully`,
+      'Failed to create coupon',
+      dbToCoupon
+    );
+  },
+
+  async update(id: string, coupon: Record<string, any>): Promise<AdminApiResponse<Coupon>> {
+    return handleApiResponse(
+      db.from('coupons').update(coupon).eq('id', id).select().single(),
+      `Coupon updated successfully`,
+      'Failed to update coupon',
+      dbToCoupon
+    );
+  },
+
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> {
+    return handleApiResponse(
+      db.from('coupons').update({ is_deleted: true }).eq('id', id).select('id').single(),
+      'Coupon deleted successfully',
+      'Failed to delete coupon'
+    );
   }
 };
 
@@ -267,6 +521,9 @@ function dbToOrder(row: any): Order {
     payment_status: row.payment_status || 'pending',
     payment_method: row.payment_method || 'cod',
     total_amount: row.total_amount || 0,
+    discount_amount: row.discount_amount || 0,
+    coupon_id: row.coupon_id,
+    applied_offer_id: row.applied_offer_id,
     notes: row.notes,
     created_at: row.created_at,
     items: Array.isArray(row.order_items) ? row.order_items.map(dbToOrderItem) : [],
@@ -280,6 +537,7 @@ export const ordersApi = {
       .from('orders')
       .select('*, order_items(*, products(*)), order_logs(*)')
       .eq('user_id', userId)
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
     if (error) return [];
     return (data || []).map(dbToOrder);
@@ -290,6 +548,7 @@ export const ordersApi = {
       .from('orders')
       .select('*, order_items(*, products(*)), order_logs(*)')
       .eq('phone', phone)
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
     if (error) return [];
     return (data || []).map(dbToOrder);
@@ -299,6 +558,7 @@ export const ordersApi = {
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*, products(*)), order_logs(*)')
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
     if (error) return [];
     return (data || []).map(dbToOrder);
@@ -317,6 +577,9 @@ export const ordersApi = {
       payment_method: orderData.payment_method || 'cod',
       payment_status: orderData.payment_status || 'pending',
       total_amount: orderData.total_amount || 0,
+      discount_amount: orderData.discount_amount || 0,
+      coupon_id: orderData.coupon_id,
+      applied_offer_id: orderData.applied_offer_id,
       notes: orderData.notes,
       user_id: orderData.user_id,
     }).select().single();
@@ -366,14 +629,21 @@ export const ordersApi = {
     return true;
   },
 
-  async update(id: string, order: Partial<Order>): Promise<boolean> {
-    const { error } = await db.from('orders').update(order).eq('id', id);
-    return !error;
+  async update(id: string, order: Partial<Order>): Promise<AdminApiResponse<Order>> {
+    return handleApiResponse(
+      db.from('orders').update(order).eq('id', id).select('*, order_items(*, products(*)), order_logs(*)').single(),
+      'Order updated successfully',
+      'Failed to update order',
+      dbToOrder
+    );
   },
 
-  async delete(id: string): Promise<boolean> {
-    const { error } = await supabase.from('orders').delete().eq('id', id);
-    return !error;
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> {
+    return handleApiResponse(
+      db.from('orders').update({ is_deleted: true }).eq('id', id).select('id').single(),
+      'Order deleted successfully',
+      'Failed to delete order'
+    );
   }
 };
 
@@ -450,21 +720,31 @@ export const testimonialsApi = {
     const { data, error } = await supabase
       .from('testimonials')
       .select('*')
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
     if (error) return [];
     return data || [];
   },
-  async add(testimonial: any): Promise<Testimonial | null> {
-    const { data, error } = await db.from('testimonials').insert(testimonial).select().single();
-    return error ? null : data;
+  async add(testimonial: any): Promise<AdminApiResponse<Testimonial>> {
+    return handleApiResponse(
+      db.from('testimonials').insert(testimonial).select().single(),
+      'Testimonial added successfully',
+      'Failed to add testimonial'
+    );
   },
-  async update(id: string, testimonial: any): Promise<boolean> {
-    const { error } = await db.from('testimonials').update(testimonial).eq('id', id);
-    return !error;
+  async update(id: string, testimonial: any): Promise<AdminApiResponse<Testimonial>> {
+    return handleApiResponse(
+      db.from('testimonials').update(testimonial).eq('id', id).select().single(),
+      'Testimonial updated successfully',
+      'Failed to update testimonial'
+    );
   },
-  async delete(id: string): Promise<boolean> {
-    const { error } = await supabase.from('testimonials').delete().eq('id', id);
-    return !error;
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> {
+    return handleApiResponse(
+      db.from('testimonials').update({ is_deleted: true }).eq('id', id).select('id').single(),
+      'Testimonial deleted successfully',
+      'Failed to delete testimonial'
+    );
   }
 };
 
@@ -486,33 +766,47 @@ export const categoriesApi = {
     const { data, error } = await supabase
       .from('categories')
       .select('*')
+      .eq('is_deleted', false)
       .order('display_order');
     if (error) {
       // Fallback for demo if table doesn't exist
       return [
-        { id: '1', name: 'Vegetables', slug: 'vegetables', icon: 'LeafyGreen', display_order: 1, is_active: true, created_at: '' },
-        { id: '2', name: 'Fruits', slug: 'fruits', icon: 'Apple', display_order: 2, is_active: true, created_at: '' },
-        { id: '3', name: 'Meat & Fish', slug: 'meat-fish', icon: 'Drumstick', display_order: 3, is_active: true, created_at: '' },
-        { id: '4', name: 'Dairy', slug: 'dairy', icon: 'Milk', display_order: 4, is_active: true, created_at: '' },
-        { id: '5', name: 'Grocery', slug: 'grocery', icon: 'ShoppingBasket', display_order: 5, is_active: true, created_at: '' },
+        { id: '1', name: 'Vegetables', slug: 'vegetables', icon: 'LeafyGreen', display_order: 1, is_active: true, created_at: '', is_deleted: false },
+        { id: '2', name: 'Fruits', slug: 'fruits', icon: 'Apple', display_order: 2, is_active: true, created_at: '', is_deleted: false },
+        { id: '3', name: 'Meat & Fish', slug: 'meat-fish', icon: 'Drumstick', display_order: 3, is_active: true, created_at: '', is_deleted: false },
+        { id: '4', name: 'Dairy', slug: 'dairy', icon: 'Milk', display_order: 4, is_active: true, created_at: '', is_deleted: false },
+        { id: '5', name: 'Grocery', slug: 'grocery', icon: 'ShoppingBasket', display_order: 5, is_active: true, created_at: '', is_deleted: false },
+        { id: '6', name: 'Services', slug: 'services', icon: 'Wrench', display_order: 6, is_active: true, created_at: '', is_deleted: false },
+        { id: '7', name: 'Recipe Kits', slug: 'recipe-kits', icon: 'ChefHat', display_order: 7, is_active: true, created_at: '', is_deleted: false },
       ];
     }
     return (data || []).map(dbToCategory);
   },
 
-  async add(category: Omit<Category, 'id' | 'created_at'>): Promise<Category | null> {
-    const { data, error } = await db.from('categories').insert(category).select().single();
-    return data ? dbToCategory(data) : null;
+  async add(category: Omit<Category, 'id' | 'created_at'>): Promise<AdminApiResponse<Category>> {
+    return handleApiResponse(
+      db.from('categories').insert(category).select().single(),
+      `Category "${category.name}" created successfully`,
+      'Failed to create category',
+      dbToCategory
+    );
   },
 
-  async update(id: string, category: Partial<Category>): Promise<boolean> {
-    const { error } = await db.from('categories').update(category).eq('id', id);
-    return !error;
+  async update(id: string, category: Partial<Category>): Promise<AdminApiResponse<Category>> {
+    return handleApiResponse(
+      db.from('categories').update(category).eq('id', id).select().single(),
+      `Category updated successfully`,
+      'Failed to update category',
+      dbToCategory
+    );
   },
 
-  async delete(id: string): Promise<boolean> {
-    const { error } = await supabase.from('categories').delete().eq('id', id);
-    return !error;
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> {
+    return handleApiResponse(
+      db.from('categories').update({ is_deleted: true }).eq('id', id).select('id').single(),
+      'Category deleted successfully',
+      'Failed to delete category'
+    );
   }
 };
 
@@ -555,7 +849,7 @@ function dbToRecipeIngredient(row: any): RecipeIngredient {
     uom: row.uom || 'pcs',
     price_override: row.price_override ? Number(row.price_override) : undefined,
     display_order: row.display_order || 0,
-    product: row.products ? dbToExperience(row.products) : undefined
+    product: row.products ? dbToExperience(Array.isArray(row.products) ? row.products[0] : row.products) : undefined
   };
 }
 
@@ -585,9 +879,10 @@ export const recipesApi = {
         *,
         recipe_ingredients (
           *,
-          product:products (*)
+          products (*)
         )
       `)
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
       
     if (error) return [];
@@ -599,6 +894,7 @@ export const recipesApi = {
       .from('recipes')
       .select('*')
       .eq('id', id)
+      .eq('is_deleted', false)
       .single();
     if (rError) return null;
 
@@ -613,27 +909,28 @@ export const recipesApi = {
     return formattedRecipe;
   },
 
-  async upsert(recipe: Partial<Recipe>): Promise<Recipe> {
+  async upsert(recipe: Partial<Recipe>): Promise<AdminApiResponse<Recipe>> {
     const payload = buildRecipePayload(recipe);
-    let query = db.from('recipes');
+    const query = db.from('recipes');
     
-    let result;
-    if (recipe.id) {
-       result = await query.update(payload).eq('id', recipe.id).select().single();
-    } else {
-       result = await query.insert(payload).select().single();
-    }
-    
-    if (result.error) {
-       console.error('[recipesApi.upsert] Error:', result.error.message, result.error.details);
-       throw new Error(result.error.message || 'Failed to save recipe.');
-    }
-    return dbToRecipe(result.data);
+    const promise = recipe.id
+      ? query.update(payload).eq('id', recipe.id).select().single()
+      : query.insert(payload).select().single();
+
+    return handleApiResponse(
+      promise,
+      `Recipe ${recipe.id ? 'updated' : 'created'} successfully`,
+      `Failed to ${recipe.id ? 'update' : 'create'} recipe`,
+      dbToRecipe
+    );
   },
 
-  async delete(id: string): Promise<boolean> {
-    const { error } = await supabase.from('recipes').delete().eq('id', id);
-    return !error;
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> {
+    return handleApiResponse(
+      db.from('recipes').update({ is_deleted: true }).eq('id', id).select('id').single(),
+      'Recipe deleted successfully',
+      'Failed to delete recipe'
+    );
   },
 
   async saveIngredients(recipeId: string, ingredients: { product_id: string; quantity: number; uom: string; price_override?: number; display_order?: number }[]): Promise<boolean> {
@@ -680,26 +977,28 @@ const dbToSubscription = (data: any): Subscription => ({
   schedule: data.schedule || {},
   created_at: data.created_at,
   updated_at: data.updated_at,
-  product: data.experiences ? dbToExperience(data.experiences) : undefined
+  product: data.products ? dbToExperience(data.products) : undefined
 });
 
 export const subscriptionsApi = {
-  async getAll() {
+  async getAll(): Promise<Subscription[]> {
     const { data, error } = await supabase
       .from('subscriptions')
-      .select('*, experiences(*)')
+      .select('*, products(*)')
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
     
     if (error) throw error;
     return (data || []).map(dbToSubscription);
   },
 
-  async updateStatus(id: string, status: SubscriptionStatus) {
-    const { error } = await db
-      .from('subscriptions')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', id);
-    if (error) throw error;
+  async updateStatus(id: string, status: SubscriptionStatus): Promise<AdminApiResponse<Subscription>> {
+    return handleApiResponse(
+      db.from('subscriptions').update({ status, updated_at: new Date().toISOString() }).eq('id', id).select('*, products(*)').single(),
+      'Subscription status updated successfully',
+      'Failed to update subscription status',
+      dbToSubscription
+    );
   },
 
   async getMetrics() {
@@ -731,7 +1030,9 @@ export const subscriptionsApi = {
 // ========== UPLOADS API (STUB) ==========
 export const uploadsApi = {
   async getAll(): Promise<Upload[]> { return []; },
-  async delete(id: string): Promise<boolean> { return true; }
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> { 
+    return { success: true, message: 'Upload deleted successfully', data: { id } };
+  }
 };
 
 // ========== SERVICES MARKETPLACE API ==========
@@ -748,6 +1049,11 @@ export function dbToService(row: any): Service {
     image: row.image_path || '', // Convenience for components using .image
     is_active: row.is_active ?? true,
     is_featured: row.is_featured ?? false,
+    max_bookings_per_slot: row.max_bookings_per_slot || 3,
+    service_pincodes: row.service_pincodes || [],
+    peak_multiplier: Number(row.peak_multiplier) || 1.0,
+    weekend_multiplier: Number(row.weekend_multiplier) || 1.1,
+    same_day_multiplier: Number(row.same_day_multiplier) || 1.15,
     created_at: row.created_at,
   };
 }
@@ -757,12 +1063,13 @@ export const servicesApi = {
     const { data, error } = await supabase
       .from('services')
       .select('*')
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(dbToService);
   },
 
-  async upsert(service: Partial<Service>): Promise<Service> {
+  async upsert(service: Partial<Service>): Promise<AdminApiResponse<Service>> {
     const slug = service.slug || (service.name || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
     
     // Build the object for Supabase upsert
@@ -776,39 +1083,31 @@ export const servicesApi = {
       image_path: service.image_path || '',
       is_featured: !!service.is_featured,
       is_active: service.is_active ?? true,
+      max_bookings_per_slot: Number(service.max_bookings_per_slot) || 3,
+      service_pincodes: service.service_pincodes || [],
+      peak_multiplier: Number(service.peak_multiplier) || 1.0,
+      weekend_multiplier: Number(service.weekend_multiplier) || 1.1,
+      same_day_multiplier: Number(service.same_day_multiplier) || 1.15,
     };
 
-    // Include ID if we are updating
-    if (service.id) {
-      payload.id = service.id;
-    }
+    if (service.id) payload.id = service.id;
 
-    try {
-      // .upsert() handles both insert (no ID match) and update (ID match)
-      // The 'onConflict: id' ensures it uses the PK for matching
-      const { data, error } = await db
-        .from('services')
-        .upsert(payload)
-        .select()
-        .single();
-        
-      if (error) {
-        // If it's the specific "single row" error, check if it's because it couldn't find/update
-        if (error.code === 'PGRST116') {
-          console.error('Service ID not found in services table. Is it a legacy product ID?');
-        }
-        throw error;
-      }
-      return dbToService(data);
-    } catch (err: any) {
-      console.error('Error in servicesApi.upsert:', err);
-      throw err;
-    }
+    const promise = db.from('services').upsert(payload, { onConflict: 'id' }).select().single();
+
+    return handleApiResponse(
+      promise,
+      `Service ${service.id ? 'updated' : 'created'} successfully`,
+      `Failed to ${service.id ? 'update' : 'create'} service`,
+      dbToService
+    );
   },
 
-  async delete(id: string): Promise<boolean> {
-    const { error } = await supabase.from('services').delete().eq('id', id);
-    return !error;
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> {
+    return handleApiResponse(
+      db.from('services').update({ is_deleted: true }).eq('id', id).select('id').single(),
+      'Service deleted successfully',
+      'Failed to delete service'
+    );
   },
 
   async getMetrics() {
@@ -842,6 +1141,11 @@ const dbToBooking = (data: any): Booking => ({
   status: data.status,
   address: data.address,
   notes: data.notes,
+  user_pincode: data.user_pincode,
+  total_price: Number(data.total_price),
+  rating: data.rating,
+  feedback: data.feedback,
+  worker_id: data.worker_id,
   created_at: data.created_at,
   service: data.services ? dbToService(data.services) : undefined
 });
@@ -851,6 +1155,7 @@ export const bookingsApi = {
     const { data, error } = await supabase
       .from('service_bookings')
       .select('*, services(*)')
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(dbToBooking);
@@ -861,37 +1166,53 @@ export const bookingsApi = {
       .from('service_bookings')
       .select('*, services(*)')
       .eq('user_id', userId)
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(dbToBooking);
   },
 
-  async add(booking: Partial<Booking>): Promise<Booking | null> {
-    const { data, error } = await db
-      .from('service_bookings')
-      .insert({
+  async add(booking: Partial<Booking>): Promise<AdminApiResponse<Booking>> {
+    return handleApiResponse(
+      db.from('service_bookings').insert({
         ...booking,
+        total_price: booking.total_price,
+        user_pincode: booking.user_pincode,
         user_id: booking.user_id || undefined,
-      })
-      .select()
-      .single();
+      }).select().single(),
+      'Booking created successfully',
+      'Failed to create booking',
+      dbToBooking
+    );
+  },
+
+  async updateStatus(id: string, status: BookingStatus): Promise<AdminApiResponse<Booking>> {
+    return handleApiResponse(
+      db.from('service_bookings').update({ status }).eq('id', id).select().single(),
+      'Booking status updated successfully',
+      'Failed to update booking status',
+      dbToBooking
+    );
+  },
+
+  async delete(id: string): Promise<AdminApiResponse<{ id: string }>> {
+    return handleApiResponse(
+      db.from('service_bookings').update({ is_deleted: true }).eq('id', id).select('id').single(),
+      'Booking deleted successfully',
+      'Failed to delete booking'
+    );
+  },
+
+  async checkSlotAvailability(serviceId: string, date: string, slot: string): Promise<{ count: number }> {
+    const { count, error } = await supabase
+      .from('service_bookings')
+      .select('*', { count: 'exact', head: true })
+      .eq('service_id', serviceId)
+      .eq('booking_date', date)
+      .eq('time_slot', slot)
+      .neq('status', 'cancelled');
+    
     if (error) throw error;
-    return data ? dbToBooking(data) : null;
-  },
-
-  async updateStatus(id: string, status: BookingStatus): Promise<boolean> {
-    const { error } = await db
-      .from('service_bookings')
-      .update({ status })
-      .eq('id', id);
-    return !error;
-  },
-
-  async delete(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('service_bookings')
-      .delete()
-      .eq('id', id);
-    return !error;
+    return { count: count || 0 };
   }
 };

@@ -16,7 +16,9 @@ const SERVICE_CATEGORIES = ['Cleaning', 'Plumbing', 'Electrical', 'Carpentry', '
 
 const defaultForm = (): Partial<Service> => ({
   name: '', category: 'Cleaning', price: 0, description: '',
-  duration: '2 hours', is_active: true, is_featured: false
+  duration: '2 hours', is_active: true, is_featured: false,
+  max_bookings_per_slot: 3, service_pincodes: [],
+  peak_multiplier: 1.0, weekend_multiplier: 1.1, same_day_multiplier: 1.15
 });
 
 export const ServiceManagement: React.FC = () => {
@@ -37,16 +39,22 @@ export const ServiceManagement: React.FC = () => {
     if (!form.name || form.price === undefined) return toast.error('Name and price are required');
     setSaving(true);
     try {
+      let res;
       if (editingService && editingService.id) {
-         await updateService(editingService.id, form);
-         toast.success('Service updated!');
+         res = await updateService(editingService.id, form);
       } else {
-         await addService(form);
-         toast.success('Service created!');
+         res = await addService(form);
       }
-      setShowForm(false);
-    } catch { 
-      toast.error('Failed to save service'); 
+
+      if (res.success) {
+        toast.success(editingService ? 'Service updated!' : 'Service created!');
+        setShowForm(false);
+      } else {
+        toast.error(res.message || 'Failed to save service');
+      }
+    } catch (error) { 
+      console.error('Save error:', error);
+      toast.error('An unexpected error occurred'); 
     } finally { 
       setSaving(false); 
     }
@@ -54,8 +62,12 @@ export const ServiceManagement: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Permanently delete this service?')) return;
-    await deleteService(id);
-    toast.success('Service removed');
+    const res = await deleteService(id);
+    if (res.success) {
+      toast.success('Service removed');
+    } else {
+      toast.error(res.message || 'Failed to remove service');
+    }
   };
 
   const filtered = services.filter(s =>
@@ -240,10 +252,54 @@ export const ServiceManagement: React.FC = () => {
                     placeholder="Or paste image URL here..." className="rounded-2xl h-12 border-slate-100 bg-slate-50 text-xs" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Description</label>
-                  <textarea value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    <textarea value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                     placeholder="What's included in this service..." rows={4}
                     className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 text-sm font-medium text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                </div>
+
+                {/* Smart Engine Settings */}
+                <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-6">
+                   <h4 className="text-xs font-black uppercase tracking-[0.2em] text-pb-green-deep flex items-center gap-2">
+                     <Zap className="w-4 h-4" /> Smart Engine Settings
+                   </h4>
+                   
+                   <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-2">
+                       <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Max Bookings / Slot</label>
+                       <Input type="number" value={form.max_bookings_per_slot || 3} 
+                         onChange={e => setForm(f => ({ ...f, max_bookings_per_slot: +e.target.value }))}
+                         className="rounded-xl h-12 border-slate-100 bg-white" />
+                     </div>
+                     <div className="space-y-2">
+                       <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Peak Multiplier (e.g. 1.2)</label>
+                       <Input type="number" step="0.1" value={form.peak_multiplier || 1.0} 
+                         onChange={e => setForm(f => ({ ...f, peak_multiplier: +e.target.value }))}
+                         className="rounded-xl h-12 border-slate-100 bg-white" />
+                     </div>
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-2">
+                       <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Weekend Multiplier</label>
+                       <Input type="number" step="0.1" value={form.weekend_multiplier || 1.1} 
+                         onChange={e => setForm(f => ({ ...f, weekend_multiplier: +e.target.value }))}
+                         className="rounded-xl h-12 border-slate-100 bg-white" />
+                     </div>
+                     <div className="space-y-2">
+                       <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Same-Day Multiplier</label>
+                       <Input type="number" step="0.1" value={form.same_day_multiplier || 1.15} 
+                         onChange={e => setForm(f => ({ ...f, same_day_multiplier: +e.target.value }))}
+                         className="rounded-xl h-12 border-slate-100 bg-white" />
+                     </div>
+                   </div>
+
+                   <div className="space-y-2">
+                      <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Service Area Pincodes (Comma separated)</label>
+                      <Input value={(form.service_pincodes || []).join(', ')} 
+                        onChange={e => setForm(f => ({ ...f, service_pincodes: e.target.value.split(',').map(p => p.trim()).filter(Boolean) }))}
+                        placeholder="e.g. 600001, 600002"
+                        className="rounded-xl h-12 border-slate-100 bg-white" />
+                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   {(['is_active', 'is_featured'] as const).map(key => (

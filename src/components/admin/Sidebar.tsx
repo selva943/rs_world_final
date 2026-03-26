@@ -40,7 +40,7 @@ const navItems = [
   { id: 'categories', label: 'Categories', icon: LayoutGrid },
   { id: 'recipes', label: 'Recipe Studio', icon: ChefHat },
   { id: 'orders', label: 'Orders', icon: ShoppingCart },
-  { id: 'offers', label: 'Market Deals', icon: Tag },
+  { id: 'promotions', label: 'Promotions', icon: Tag },
   { id: 'uploads', label: 'Media Library', icon: ImageIcon },
   { id: 'testimonials', label: 'Fresh Reviews', icon: MessageSquare },
   { id: 'settings', label: 'Settings', icon: Settings },

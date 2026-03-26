@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTranslation } from 'react-i18next';
 import { X, Loader2, MessageCircle, ShoppingBasket, MapPin, Phone, User, StickyNote, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ interface OrderModalProps {
 const WHATSAPP_NUMBER = '917550346705'; // Change to your actual number
 
 export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose }) => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [form, setForm] = useState({
     customer_name: '',
@@ -47,12 +49,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
     if (!product) return;
 
     // Validation
-    if (!form.customer_name.trim()) { toast.error('Please enter your name'); return; }
+    if (!form.customer_name.trim()) { toast.error(t('error_enter_name')); return; }
     if (!form.phone.trim() || form.phone.replace(/\D/g, '').length < 10) {
-      toast.error('Please enter a valid 10-digit phone number'); return;
+      toast.error(t('error_enter_phone')); return;
     }
     if (form.delivery_type === 'delivery' && !form.address.trim()) {
-      toast.error('Please enter your delivery address'); return;
+      toast.error(t('error_enter_address')); return;
     }
 
     setIsSaving(true);
@@ -82,7 +84,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
       const savedOrder = await ordersApi.add(orderPayload, orderItems);
 
       if (!savedOrder) {
-        throw new Error('Order could not be saved. Please try again.');
+        throw new Error(t('order_save_error', 'Order could not be saved. Please try again.'));
       }
 
       console.log('[OrderModal] Order saved:', savedOrder.id);
@@ -107,7 +109,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
 
       const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(waMessage)}`;
 
-      toast.success(`Order placed! Opening WhatsApp...`);
+      toast.success(t('order_placed_toast'));
       setDone(true);
       setTimeout(() => {
         window.open(waUrl, '_blank');
@@ -142,9 +144,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
           {/* Header */}
           <div className="px-8 pt-8 pb-6 bg-pb-green-deep text-white flex items-start justify-between">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300 mb-1">Quick Order</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300 mb-1">{t('quick_order')}</p>
               <h3 className="text-xl font-black leading-tight">{product.name}</h3>
-              <p className="text-sm text-emerald-200 font-bold mt-1">₹{product.price} / {product.unit || 'unit'}</p>
+              <p className="text-sm text-emerald-200 font-bold mt-1">₹{product.price} / {product.unit || t('unit')}</p>
             </div>
             <button
               type="button"
@@ -161,10 +163,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
               <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center">
                 <Check className="w-10 h-10 text-emerald-500" />
               </div>
-              <h4 className="text-2xl font-black text-slate-800">Order Placed!</h4>
-              <p className="text-slate-500 font-medium">WhatsApp is opening with your order details for confirmation.</p>
+              <h4 className="text-2xl font-black text-slate-800">{t('order_placed_title')}</h4>
+              <p className="text-slate-500 font-medium">{t('order_placed_desc')}</p>
               <Button onClick={handleClose} variant="ghost" className="mt-4 text-pb-green-deep">
-                Close
+                {t('close')}
               </Button>
             </div>
           ) : (
@@ -175,12 +177,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
                 {/* Name */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5" /> Your Name *
+                    <User className="w-3.5 h-3.5" /> {t('your_name_label')}
                   </Label>
                   <Input
                     value={form.customer_name}
                     onChange={(e) => setForm(f => ({ ...f, customer_name: e.target.value }))}
-                    placeholder="e.g. Rajesh Kumar"
+                    placeholder={t('name_placeholder')}
                     className="h-12 bg-slate-50 border-slate-200 rounded-xl font-medium"
                     required
                   />
@@ -189,13 +191,13 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
                 {/* Phone */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5" /> WhatsApp Number *
+                    <Phone className="w-3.5 h-3.5" /> {t('whatsapp_number_label')}
                   </Label>
                   <Input
                     type="tel"
                     value={form.phone}
                     onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
-                    placeholder="e.g. 9876543210"
+                    placeholder={t('phone_placeholder_order')}
                     className="h-12 bg-slate-50 border-slate-200 rounded-xl font-medium"
                     required
                   />
@@ -204,7 +206,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
                 {/* Quantity */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Quantity ({product.unit || 'unit'})
+                    {t('quantity_label', { unit: product.unit || t('unit') })}
                   </Label>
                   <div className="flex items-center gap-4 bg-slate-50 rounded-xl border border-slate-200 px-4 py-2">
                     <button
@@ -228,12 +230,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
                 {/* Delivery type */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Delivery Option
+                    {t('delivery_option_label')}
                   </Label>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { value: 'delivery', label: '🚚 Home Delivery', sub: 'We deliver to you' },
-                      { value: 'pickup', label: '🏪 Branch Pickup', sub: 'Collect from store' },
+                      { value: 'delivery', label: `🚚 ${t('home_delivery_label')}`, sub: t('home_delivery_desc') },
+                      { value: 'pickup', label: `🏪 ${t('branch_pickup_label')}`, sub: t('branch_pickup_desc') },
                     ].map(opt => (
                       <button
                         key={opt.value}
@@ -257,12 +259,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
                 {form.delivery_type === 'delivery' && (
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5" /> Delivery Address *
+                      <MapPin className="w-3.5 h-3.5" /> {t('delivery_address_label')}
                     </Label>
                     <Textarea
                       value={form.address}
                       onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))}
-                      placeholder="House no., Street, Area, City..."
+                      placeholder={t('address_placeholder_order')}
                       className="bg-slate-50 border-slate-200 rounded-xl font-medium min-h-[80px] resize-none"
                       required={form.delivery_type === 'delivery'}
                     />
@@ -272,12 +274,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
                 {/* Notes */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                    <StickyNote className="w-3.5 h-3.5" /> Special Instructions (optional)
+                    <StickyNote className="w-3.5 h-3.5" /> {t('instructions_label')}
                   </Label>
                   <Input
                     value={form.notes}
                     onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))}
-                    placeholder="e.g. No onion, extra ripe, etc."
+                    placeholder={t('instructions_placeholder')}
                     className="h-11 bg-slate-50 border-slate-200 rounded-xl font-medium"
                   />
                 </div>
@@ -285,7 +287,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
                 {/* Price summary */}
                 <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black text-pb-green-deep uppercase tracking-widest">Order Total</p>
+                    <p className="text-[10px] font-black text-pb-green-deep uppercase tracking-widest">{t('order_total_label')}</p>
                     <p className="text-xs text-slate-500">{form.quantity} × ₹{product.price}</p>
                   </div>
                   <p className="text-2xl font-black text-pb-green-deep">
@@ -302,13 +304,13 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, product, onClose
                   className="w-full h-14 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-sm gap-3 shadow-lg shadow-emerald-500/30 rounded-2xl"
                 >
                   {isSaving ? (
-                    <><Loader2 className="w-5 h-5 animate-spin" /> Placing Order...</>
+                    <><Loader2 className="w-5 h-5 animate-spin" /> {t('placing_order_status')}</>
                   ) : (
-                    <><MessageCircle className="w-5 h-5" /> Order via WhatsApp</>
+                    <><MessageCircle className="w-5 h-5" /> {t('order_whatsapp_btn')}</>
                   )}
                 </Button>
                 <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-3">
-                  Order saved to admin panel + sent to WhatsApp
+                  {t('order_footer_note')}
                 </p>
               </div>
             </form>

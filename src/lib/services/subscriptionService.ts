@@ -71,8 +71,8 @@ export const subscriptionService = {
     return data;
   },
 
-  // Update subscription status (pause/resume/cancel)
-  async updateStatus(id: string, status: 'active' | 'paused' | 'cancelled'): Promise<boolean> {
+  // Update subscription status (cancel)
+  async updateStatus(id: string, status: 'active' | 'cancelled'): Promise<boolean> {
     const { error } = await (supabase.from('subscriptions') as any)
       .update({ status })
       .eq('id', id);

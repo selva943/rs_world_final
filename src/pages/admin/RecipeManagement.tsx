@@ -240,19 +240,24 @@ export const RecipeManagement: React.FC = () => {
       };
 
       if (editingRecipe) {
-        const savedRecipe = await updateRecipe(editingRecipe.id, recipePayload);
-        if (savedRecipe) {
+        const res = await updateRecipe(editingRecipe.id, recipePayload);
+        if (res.success && res.data) {
           await saveRecipeIngredients(editingRecipe.id, form.ingredients);
+          toast.success("Recipe and ingredients updated!");
+          setIsFormOpen(false);
+        } else {
+          toast.error(res.message || "Failed to update recipe");
         }
-        toast.success("Recipe and ingredients updated!");
       } else {
-        const savedRecipe = await addRecipe(recipePayload);
-        if (savedRecipe && savedRecipe.id) {
-            await saveRecipeIngredients(savedRecipe.id, form.ingredients);
+        const res = await addRecipe(recipePayload);
+        if (res.success && res.data) {
+          await saveRecipeIngredients(res.data.id, form.ingredients);
+          toast.success("Recipe saved and mapped!");
+          setIsFormOpen(false);
+        } else {
+          toast.error(res.message || "Failed to add recipe");
         }
-        toast.success("Recipe saved and mapped!");
       }
-      setIsFormOpen(false);
     } catch (err: any) {
       toast.error(err.message || "Failed to save recipe");
     } finally {
@@ -329,7 +334,12 @@ export const RecipeManagement: React.FC = () => {
                 </Button>
                 <Button 
                   variant="ghost" 
-                  onClick={() => deleteRecipe(recipe.id)}
+                  onClick={async () => {
+                    if (!confirm(`Delete recipe "${recipe.name}"?`)) return;
+                    const res = await deleteRecipe(recipe.id);
+                    if (res.success) toast.success("Recipe deleted");
+                    else toast.error(res.message || "Failed to delete recipe");
+                  }}
                   className="text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-xl h-12 px-5 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />

@@ -4,7 +4,9 @@ import { Recipe } from '@/types/app';
 import { Button } from '@/components/ui/button';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import { calculateIngredientPrice } from '@/lib/utils/recipe-logic';
+import { getOptimizedImageUrl } from '@/lib/utils/image-optimization';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -13,6 +15,7 @@ interface RecipeCardProps {
 }
 
 export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onView, onBuyIngredients }) => {
+  const { t } = useTranslation();
   const difficultyColor = {
     'Easy': 'text-emerald-500 bg-emerald-50 border-emerald-100',
     'Medium': 'text-amber-500 bg-amber-50 border-amber-100',
@@ -35,7 +38,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onView, onBuyIng
       {/* Image Section */}
       <div className="relative aspect-[4/3] overflow-hidden">
         <img 
-          src={recipe.image} 
+          src={getOptimizedImageUrl(recipe.image, 600)} 
           alt={recipe.name}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
         />
@@ -45,7 +48,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onView, onBuyIng
         <div className="absolute top-6 left-6 flex flex-wrap gap-2">
           {recipe.is_trending && (
             <div className="px-4 py-1.5 bg-[#FFF59D] text-pb-green-deep text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-1.5 shadow-lg border border-white/20">
-              <Sparkles className="w-3 h-3" /> Trending
+              <Sparkles className="w-3 h-3" /> {t('trending_label')}
             </div>
           )}
           <div className="px-4 py-1.5 bg-white/90 backdrop-blur-md text-pb-green-deep text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg border border-white/20">
@@ -79,12 +82,12 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onView, onBuyIng
 
         <div className="flex items-center justify-between mb-6">
            <div className="flex flex-col">
-              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Kit Price</span>
+              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{t('kit_price')}</span>
               <span className="text-xl font-bold text-pb-green-deep">₹{totalKitPrice.toFixed(0)}</span>
            </div>
            <div className="text-right">
-              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Ingredients</span>
-              <span className="block text-xs font-bold text-slate-600">{(recipe.ingredients || []).length} Items</span>
+              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">{t('ingredients')}</span>
+              <span className="block text-xs font-bold text-slate-600">{(recipe.ingredients || []).length} {t('items')}</span>
            </div>
         </div>
 
@@ -94,7 +97,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onView, onBuyIng
             onClick={() => onView(recipe)}
             className="flex-[1.5] bg-pb-green-deep hover:bg-emerald-800 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-900/10 group-hover:translate-y-[-2px] transition-all"
           >
-            Explore Recipe <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+            {t('explore_recipe')} <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
           </Button>
           <Button 
             size="lg"

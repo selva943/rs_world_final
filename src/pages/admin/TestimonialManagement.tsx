@@ -101,14 +101,19 @@ export const TestimonialManagement: React.FC = () => {
         updated_at: new Date().toISOString()
       };
 
+      let res;
       if (editingTestimonial) {
-        await updateTestimonial(editingTestimonial.id, payload as any);
-        toast.success('Review updated!');
+        res = await updateTestimonial(editingTestimonial.id, payload as any);
       } else {
-        await addTestimonial({ ...payload, isTestimonial: true } as any);
-        toast.success('Review added to the wall of love!');
+        res = await addTestimonial({ ...payload, isTestimonial: true } as any);
       }
-      setIsFormOpen(false);
+
+      if (res.success) {
+        toast.success(editingTestimonial ? 'Review updated!' : 'Review added to the wall of love!');
+        setIsFormOpen(false);
+      } else {
+        toast.error(res.message || 'Failed to save review');
+      }
     } catch (error: any) {
       console.error("Save error:", error);
       toast.error(error.message || 'Failed to save review');
@@ -195,7 +200,12 @@ export const TestimonialManagement: React.FC = () => {
                   <Edit2 className="w-4 h-4 mr-2" /> Edit
                 </Button>
                 <Button 
-                  onClick={() => deleteTestimonial(testimonial.id)}
+                  onClick={async () => {
+                    if (!confirm("Delete this review?")) return;
+                    const res = await deleteTestimonial(testimonial.id);
+                    if (res.success) toast.success("Review deleted");
+                    else toast.error(res.message || "Failed to delete review");
+                  }}
                   size="sm"
                   variant="ghost" 
                   className="text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl"

@@ -6,6 +6,7 @@ import {
   Clock, 
   ChefHat, 
   Plus, 
+  Minus,
   Check, 
   ArrowRight,
   Info,
@@ -16,8 +17,10 @@ import {
   Globe,
   Users
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Recipe, RecipeIngredient } from '@/types/app';
 import { Button } from '@/components/ui/button';
+import { getOptimizedImageUrl } from '@/lib/utils/image-optimization';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -31,6 +34,7 @@ interface RecipeDetailSheetProps {
 }
 
 export const RecipeDetailSheet: React.FC<RecipeDetailSheetProps> = ({ recipe, isOpen, onClose }) => {
+  const { t } = useTranslation();
   const [servings, setServings] = useState(2);
   const { addToCart } = useCart();
   const navigate = useNavigate();
@@ -55,7 +59,7 @@ export const RecipeDetailSheet: React.FC<RecipeDetailSheetProps> = ({ recipe, is
 
   const handleAddAllToCart = () => {
     if (!recipe.ingredients || recipe.ingredients.length === 0) {
-      toast.error("No ingredients mapped to this recipe yet.");
+      toast.error(t('no_ingredients_error', 'No ingredients mapped to this recipe yet.'));
       return;
     }
 
@@ -73,9 +77,19 @@ export const RecipeDetailSheet: React.FC<RecipeDetailSheetProps> = ({ recipe, is
       }
     });
 
-    toast.success(`Ingredients for ${servings} servings of ${recipe.name} added to cart!`);
+    toast.success(t('added_to_basket_recipe', { count: servings, name: recipe.name }));
     onClose();
     navigate('/checkout');
+  };
+
+  const getEmbedUrl = (url: string) => {
+    if (!url) return '';
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    if (match && match[2].length === 11) {
+      return `https://www.youtube.com/embed/${match[2]}`;
+    }
+    return url;
   };
 
   const renderIngredientQty = (ing: RecipeIngredient) => {
@@ -105,111 +119,125 @@ export const RecipeDetailSheet: React.FC<RecipeDetailSheetProps> = ({ recipe, is
             className="fixed right-0 top-0 h-screen w-full max-w-2xl bg-pb-bg z-[101] shadow-2xl flex flex-col overflow-hidden"
           >
             {/* Header / Hero */}
-            <div className="relative h-[300px] shrink-0">
+            <div className="relative h-[200px] md:h-[240px] shrink-0">
               <img 
-                src={recipe.image} 
+                src={getOptimizedImageUrl(recipe.image, 1000)} 
                 className="w-full h-full object-cover" 
                 alt={recipe.name}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-pb-bg via-black/20 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-pb-bg via-black/40 to-transparent" />
               <button 
                 onClick={onClose}
-                className="absolute top-8 right-8 w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white transition-all border border-white/20"
+                className="absolute top-6 right-6 w-10 h-10 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all border border-white/10"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
 
-              <div className="absolute bottom-8 left-8 right-8">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="px-4 py-1 bg-[#FFF59D] text-pb-green-deep text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg shadow-black/10">
+              <div className="absolute bottom-6 left-8 right-8">
+                <div className="flex items-center gap-2.5 mb-2.5">
+                  <div className="px-3 py-0.5 bg-[#FFF59D] text-pb-green-deep text-[9px] font-black uppercase tracking-[0.2em] rounded-md shadow-sm">
                     {recipe.category}
                   </div>
                   {recipe.is_trending && (
-                    <div className="px-4 py-1 bg-amber-400 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg shadow-black/10">
-                      Trending
+                    <div className="px-3 py-0.5 bg-amber-400 text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-md shadow-sm">
+                      {t('trending_label')}
                     </div>
                   )}
-                  <div className="flex items-center gap-1.5 text-white/90 text-[10px] font-black uppercase tracking-widest font-mono">
+                  <div className="flex items-center gap-1 text-white/90 text-[10px] font-black uppercase tracking-widest font-mono">
                     <Clock className="w-3.5 h-3.5 text-emerald-400" />
                     {recipe.prep_time}
                   </div>
                 </div>
-                <h2 className="text-4xl md:text-5xl font-playfair font-black text-white tracking-tight leading-none drop-shadow-2xl">
+                <h2 className="text-3xl md:text-4xl font-playfair font-black text-white tracking-tight leading-none drop-shadow-md">
                   {recipe.name}
                 </h2>
               </div>
             </div>
 
             {/* Quick Stats Bar */}
-            <div className="bg-white border-b border-slate-50 px-10 py-6 grid grid-cols-3 gap-4 shrink-0 shadow-sm relative z-10">
-               <div className="flex flex-col items-center border-r border-slate-100">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-1">Portions</span>
-                  <div className="flex items-center gap-4 text-pb-green-deep">
-                     <button onClick={() => setServings(s => Math.max(1, s - 1))} className="hover:text-emerald-400"><Users className="w-3.5 h-3.5" /></button>
-                     <span className="text-sm font-black">{servings}</span>
-                     <button onClick={() => setServings(s => s + 1)} className="hover:text-emerald-400"><Users className="w-3.5 h-3.5" /></button>
-                  </div>
+            <div className="bg-slate-50/80 backdrop-blur-xl border-y border-slate-200 px-6 py-4 flex items-center justify-between shrink-0 relative z-10">
+               <div className="flex items-center gap-8">
+                 <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 pl-1">{t('servings')}</span>
+                    <div className="flex items-center gap-4 bg-white border border-slate-300 rounded-full p-1.5 shadow-sm">
+                       <button 
+                          onClick={() => setServings(s => Math.max(1, s - 1))} 
+                          className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 border border-slate-200 shadow-sm hover:bg-emerald-50 hover:border-emerald-200 text-slate-600 hover:text-emerald-700 transition-all active:scale-95"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                       <span className="text-lg font-black w-6 text-center text-slate-800">{servings}</span>
+                       <button 
+                          onClick={() => setServings(s => s + 1)} 
+                          className="w-8 h-8 flex items-center justify-center rounded-full bg-emerald-50 border border-emerald-200 shadow-sm hover:bg-emerald-100 hover:border-emerald-300 text-emerald-700 transition-all active:scale-95"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                    </div>
+                 </div>
+                 
+                 <div className="h-10 w-px bg-slate-200 hidden sm:block"></div>
+
+                 <div className="flex flex-col hidden sm:flex">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{t('energy')}</span>
+                    <div className="flex items-center gap-1.5 text-orange-500 font-bold text-sm h-8">
+                       <Flame className="w-4 h-4" />
+                       {Math.round((recipe.calories || 450) * scalingFactor)} kcal
+                    </div>
+                 </div>
                </div>
-               <div className="flex flex-col items-center border-r border-slate-100">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-1">Energy</span>
-                  <div className="flex items-center gap-1.5 text-orange-500">
-                     <Flame className="w-3.5 h-3.5" />
-                     <span className="text-sm font-black">{Math.round((recipe.calories || 450) * scalingFactor)} kcal</span>
-                  </div>
-               </div>
-               <div className="flex flex-col items-center">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-300 mb-1">Masterclass</span>
-                  <div className="flex items-center gap-1.5 text-blue-500">
-                     <Play className="w-3.5 h-3.5" />
-                     <span className="text-sm font-black">Video</span>
-                  </div>
-               </div>
+
+               {recipe.video_url && (
+                 <a href="#methodology" className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-full font-bold text-[10px] uppercase tracking-widest hover:bg-blue-100 transition-colors">
+                    <Play className="w-3.5 h-3.5" /> {t('watch_video')}
+                 </a>
+               )}
             </div>
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-8 md:p-12 space-y-12">
               <section className="space-y-4">
                 <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-pb-green-deep flex items-center gap-2">
-                    <Info className="w-4 h-4" /> The Chef's Story
+                    <Info className="w-4 h-4" /> {t('the_chefs_story')}
                 </h3>
                 <p className="text-xl text-slate-500 font-medium leading-relaxed italic border-l-4 border-emerald-100 pl-6">
                   "{recipe.description}"
                 </p>
               </section>
 
-              <section className="space-y-8">
+              <section className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-black text-slate-800">Ingredients Kit</h3>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-xl border border-emerald-100">
-                        <span className="text-[10px] font-black text-pb-green-deep uppercase tracking-widest">Total Kit Value:</span>
-                        <span className="text-lg font-bold text-pb-green-deep">₹{totalPrice.toFixed(2)}</span>
+                    <h3 className="text-xl font-black text-slate-800">{t('ingredients')}</h3>
+                    <div className="text-right">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">{t('kit_total')}</span>
+                        <span className="text-xl font-black text-pb-green-deep">₹{totalPrice.toFixed(0)}</span>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4">
+                <div className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-sm">
                   {recipe.ingredients?.map((ing, idx) => (
                     <div 
                         key={ing.id} 
-                        className="flex items-center justify-between p-6 bg-white border border-slate-100 rounded-3xl hover:border-emerald-200 transition-colors shadow-sm group"
+                        className={cn(
+                          "flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors",
+                          idx !== (recipe.ingredients?.length || 0) - 1 && "border-b border-slate-50"
+                        )}
                     >
-                      <div className="flex items-center gap-6">
-                        <div className="w-16 h-16 bg-slate-50 rounded-2xl overflow-hidden shadow-inner border border-slate-100 flex items-center justify-center group-hover:bg-emerald-50 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white rounded-xl overflow-hidden border border-slate-100 flex items-center justify-center shrink-0">
                             {ing.product?.image ? (
-                                <img src={ing.product.image} className="w-full h-full object-cover" alt="Ingredient" />
+                                <img src={getOptimizedImageUrl(ing.product.image, 200)} className="w-full h-full object-cover p-1 rounded-xl" alt={ing.product.name} />
                             ) : (
-                                <ShoppingBasket className="w-6 h-6 text-slate-200" />
+                                <ShoppingBasket className="w-5 h-5 text-slate-200" />
                             )}
                         </div>
-                        <div>
-                          <p className="font-black text-slate-800 tracking-tight text-lg leading-none mb-1">{ing.product?.name || 'Loading...'}</p>
-                           <p className="text-[10px] font-black uppercase tracking-widest text-pb-green-deep opacity-60">Req: {renderIngredientQty(ing)}</p>
+                        <div className="flex flex-col">
+                          <p className="font-bold text-slate-800 text-sm">{ing.product?.name || 'Loading...'}</p>
+                          <p className="text-[11px] font-semibold text-slate-400 mt-0.5">{renderIngredientQty(ing)}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                         <p className="text-lg font-bold text-slate-800">
-                           ₹{(calculateIngredientPrice(ing, ing.product) * scalingFactor).toFixed(0)}
-                         </p>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-300">Added to kit</p>
+                      <div className="font-black text-slate-800">
+                        ₹{(calculateIngredientPrice(ing, ing.product) * scalingFactor).toFixed(0)}
                       </div>
                     </div>
                   ))}
@@ -219,17 +247,13 @@ export const RecipeDetailSheet: React.FC<RecipeDetailSheetProps> = ({ recipe, is
               {/* Cooking Methodology Section */}
               <section className="space-y-10 border-t border-slate-100 pt-12">
                  <div className="flex items-center justify-between">
-                    <h3 className="text-2xl font-black text-slate-800 font-playfair italic">Cooking Methodology</h3>
+                    <h3 className="text-2xl font-black text-slate-800 font-playfair italic">{t('cooking_methodology')}</h3>
                  </div>
 
                  {recipe.video_url && (
                     <div className="aspect-video w-full rounded-[2.5rem] overflow-hidden border-4 border-slate-50 shadow-2xl">
                        <iframe 
-                          src={recipe.video_url.includes('youtube.com/watch?v=') 
-                             ? recipe.video_url.replace('watch?v=', 'embed/') 
-                             : recipe.video_url.includes('youtu.be/')
-                             ? recipe.video_url.replace('youtu.be/', 'youtube.com/embed/')
-                             : recipe.video_url} 
+                          src={getEmbedUrl(recipe.video_url)} 
                           className="w-full h-full"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
@@ -251,9 +275,9 @@ export const RecipeDetailSheet: React.FC<RecipeDetailSheetProps> = ({ recipe, is
                     {!recipe.instructions?.length && (
                        <div className="p-10 bg-slate-50 rounded-[2.5rem] text-center border-2 border-dashed border-slate-200">
                           <ChefHat className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-                          <p className="text-xs font-black uppercase tracking-widest text-slate-300">Detailed steps to be published soon</p>
-                       </div>
-                    )}
+                           <p className="text-xs font-black uppercase tracking-widest text-slate-300">{t('steps_soon', 'Detailed steps to be published soon')}</p>
+                        </div>
+                     )}
                  </div>
               </section>
 
@@ -263,17 +287,17 @@ export const RecipeDetailSheet: React.FC<RecipeDetailSheetProps> = ({ recipe, is
                     <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
                         <Zap className="w-6 h-6 text-[#FFF59D]" />
                     </div>
-                    <h4 className="text-2xl font-playfair font-black tracking-tight">One-Click Feast</h4>
+                    <h4 className="text-2xl font-playfair font-black tracking-tight">{t('one_click_feast')}</h4>
                 </div>
                 <p className="text-emerald-100/70 font-medium leading-relaxed mb-8 max-w-md">
-                   We've matched these ingredients with our freshest local inventory. Adding this kit ensures you have exactly what's needed for the perfect {recipe.name}.
+                   {t('one_click_feast_description', { recipeName: recipe.name })}
                 </p>
                 <div className="flex flex-wrap gap-3">
                    <div className="px-4 py-2 bg-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 border border-white/5">
-                      <Check className="w-3 h-3" /> Pre-portioned
+                      <Check className="w-3 h-3" /> {t('pre_portioned')}
                    </div>
                    <div className="px-4 py-2 bg-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 border border-white/5">
-                      <Check className="w-3 h-3" /> Zero Waste
+                      <Check className="w-3 h-3" /> {t('zero_waste')}
                    </div>
                 </div>
               </section>
@@ -282,16 +306,29 @@ export const RecipeDetailSheet: React.FC<RecipeDetailSheetProps> = ({ recipe, is
             {/* Sticky Action Footer */}
             <div className="p-8 md:p-12 bg-white border-t border-slate-100 flex flex-col md:flex-row gap-6 items-center shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.05)]">
               <div className="flex-1 text-center md:text-left">
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">Estimated Prep Kit Total</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">{t('estimated_prep_kit_total')}</p>
                 <p className="text-4xl font-bold text-slate-900 leading-none">₹{totalPrice.toFixed(2)}</p>
               </div>
-              <div className="flex gap-4 w-full md:w-auto">
+              <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
                  <Button 
                     size="lg"
+                    variant="outline"
                     onClick={handleAddAllToCart}
-                    className="flex-1 md:w-[300px] bg-pb-green-deep hover:bg-emerald-800 text-white rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-emerald-900/20"
+                    className="flex-1 md:w-auto border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-[10px]"
                  >
-                    Add All Ingredients <ArrowRight className="w-5 h-5 ml-4" />
+                    {t('add_all_ingredients')}
+                 </Button>
+                 <Button 
+                    size="lg"
+                    onClick={() => {
+                      addToCart(recipe, 1);
+                      toast.success(t('recipe_kit_added', 'Recipe Kit added to basket!'));
+                      onClose();
+                      navigate('/checkout');
+                    }}
+                    className="flex-1 md:w-[240px] bg-pb-green-deep hover:bg-emerald-800 text-white rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-emerald-900/20"
+                 >
+                    {t('add_kit_to_basket', 'Add Kit to Basket')} <ArrowRight className="w-5 h-5 ml-4" />
                  </Button>
               </div>
             </div>

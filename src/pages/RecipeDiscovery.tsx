@@ -26,9 +26,6 @@ export function RecipeDiscovery() {
   const { recipes, loading } = useData();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [difficultyFilter, setDifficultyFilter] = useState<string[]>([]);
-  const [timeFilter, setTimeFilter] = useState<string | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
@@ -53,23 +50,12 @@ export function RecipeDiscovery() {
       // Category filter
       if (selectedCategory !== 'All' && recipe.category !== selectedCategory) return false;
 
-      // Difficulty filter
-      if (difficultyFilter.length > 0 && !difficultyFilter.includes(recipe.difficulty)) return false;
-
-      // Time filter (Under 15, 30, 60 mins)
-      if (timeFilter) {
-        const mins = parseInt(recipe.prep_time);
-        if (timeFilter === '15' && mins > 15) return false;
-        if (timeFilter === '30' && mins > 30) return false;
-        if (timeFilter === '60' && mins > 60) return false;
-      }
-
       // Search query
       const name = recipe.name.toLowerCase();
       const query = searchQuery.toLowerCase();
       return name.includes(query);
     });
-  }, [recipes, selectedCategory, searchQuery, difficultyFilter, timeFilter]);
+  }, [recipes, selectedCategory, searchQuery]);
 
   const handleQuickAdd = (recipe: Recipe) => {
     setSelectedRecipe(recipe);
@@ -156,94 +142,7 @@ export function RecipeDiscovery() {
                 className="pl-20 bg-emerald-50/30 border-none text-xl rounded-[2.5rem] py-10 focus:ring-4 focus:ring-emerald-500/5 font-bold placeholder:text-slate-400 placeholder:italic transition-all"
               />
             </div>
-            
-            <div className="flex gap-4">
-              <Button 
-                onClick={() => setShowFilters(!showFilters)}
-                className={cn(
-                  "h-[80px] rounded-[2.5rem] px-10 font-black uppercase tracking-widest gap-3 transition-all duration-500 group",
-                  showFilters 
-                    ? "bg-pb-green-deep text-[#FFF59D] shadow-xl shadow-emerald-900/30" 
-                    : "bg-white text-slate-700 border border-slate-100/50 hover:bg-slate-50 shadow-lg shadow-slate-200/50"
-                )}
-              >
-                <Filter className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
-                Customize Discovery
-              </Button>
-            </div>
           </div>
-
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0, y: -20 }}
-                animate={{ height: 'auto', opacity: 1, y: 0 }}
-                exit={{ height: 0, opacity: 0, y: -20 }}
-                transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
-                className="overflow-hidden"
-              >
-                <div className="pt-10 grid grid-cols-1 md:grid-cols-3 gap-12 border-t border-emerald-100/30 mt-10">
-                  <div className="space-y-6">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-pb-green-deep flex items-center gap-2">
-                        <Clock className="w-4 h-4" /> Prep Time
-                    </h4>
-                    <div className="flex flex-wrap gap-3">
-                      {['15', '30', '60'].map(time => (
-                        <button
-                          key={time}
-                          onClick={() => setTimeFilter(timeFilter === time ? null : time)}
-                          className={cn(
-                            "px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all border",
-                            timeFilter === time 
-                              ? "bg-pb-green-deep text-[#FFF59D] border-pb-green-deep shadow-lg shadow-emerald-900/20 translate-y-[-2px]" 
-                              : "bg-white text-slate-400 border-slate-100 hover:border-pb-green-deep/30 hover:text-pb-green-deep"
-                          )}
-                        >
-                          Under {time} min
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-6">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-pb-green-deep flex items-center gap-2">
-                        <ChefHat className="w-4 h-4" /> Level
-                    </h4>
-                    <div className="flex flex-wrap gap-3">
-                      {['Easy', 'Medium', 'Hard'].map(level => (
-                        <button
-                          key={level}
-                          onClick={() => {
-                            setDifficultyFilter(prev => 
-                                prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]
-                            );
-                          }}
-                          className={cn(
-                            "px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all border",
-                            difficultyFilter.includes(level) 
-                              ? "bg-pb-green-deep text-[#FFF59D] border-pb-green-deep shadow-lg shadow-emerald-900/20 translate-y-[-2px]" 
-                              : "bg-white text-slate-400 border-slate-100 hover:border-pb-green-deep/30 hover:text-pb-green-deep"
-                          )}
-                        >
-                          {level}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-end justify-end">
-                    <Button 
-                        variant="ghost" 
-                        onClick={() => { setTimeFilter(null); setDifficultyFilter([]); }}
-                        className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 hover:text-pb-green-deep hover:bg-emerald-50 rounded-xl"
-                    >
-                        Reset Explorer
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         {/* Categories Scroller */}

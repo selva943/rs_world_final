@@ -19,12 +19,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { offersApi, storageApi } from '@/lib/services/api';
-import { Offer } from '@/types/app';
+import { Offer, AdminApiResponse } from '@/types/app';
+import { useData } from '@/context/DataContext';
 import { cn } from '@/lib/utils';
 
 export const OfferManagement = () => {
-  const [offers, setOffers] = useState<Offer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { offers, addOffer, updateOffer, deleteOffer, refreshOffers, loading } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
@@ -49,22 +49,7 @@ export const OfferManagement = () => {
     is_featured: false
   });
 
-  useEffect(() => {
-    fetchOffers();
-  }, []);
-
-  const fetchOffers = async () => {
-    setLoading(true);
-    try {
-      const data = await offersApi.getAll();
-      setOffers(data);
-    } catch (error) {
-      console.error("Error fetching offers:", error);
-      toast.error("Failed to load offers");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Deleting local fetch logic as useData handles it
 
   const handleOpenModal = (offer: Offer | null = null) => {
     if (offer) {
@@ -162,13 +147,14 @@ export const OfferManagement = () => {
       console.log("FINAL OFFER PAYLOAD:", payload);
 
       const res = editingOfferId 
-        ? await offersApi.update(editingOfferId, payload as any)
-        : await offersApi.add(payload as any);
+        ? await updateOffer(editingOfferId, payload as any)
+        : await addOffer(payload as any);
 
-      if (res) {
+      if (res.success) {
         toast.success(editingOfferId ? 'Offer updated!' : 'Offer created!');
-        fetchOffers();
         handleCloseModal();
+      } else {
+        toast.error(res.message || 'Failed to save offer');
       }
     } catch (error: any) {
       console.error('Save error:', error);
@@ -182,10 +168,11 @@ export const OfferManagement = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this offer?')) return;
     try {
-      const success = await offersApi.delete(id);
-      if (success) {
+      const res = await deleteOffer(id);
+      if (res.success) {
         toast.success('Offer deleted');
-        fetchOffers();
+      } else {
+        toast.error(res.message || "Failed to delete offer");
       }
     } catch (error) {
       console.error("Delete error:", error);
@@ -196,10 +183,11 @@ export const OfferManagement = () => {
   const toggleStatus = async (offer: Offer) => {
     try {
       const newActive = !offer.is_active;
-      const success = await offersApi.update(offer.id, { is_active: newActive } as any);
-      if (success) {
+      const res = await updateOffer(offer.id, { is_active: newActive } as any);
+      if (res.success) {
         toast.success(`Offer ${newActive ? 'activated' : 'deactivated'}`);
-        fetchOffers();
+      } else {
+        toast.error(res.message || 'Failed to update status');
       }
     } catch (error) {
       console.error("Toggle status error:", error);
@@ -210,10 +198,11 @@ export const OfferManagement = () => {
   const toggleFeatured = async (offer: Offer) => {
     try {
       const newFeatured = !offer.is_featured;
-      const success = await offersApi.update(offer.id, { is_featured: newFeatured } as any);
-      if (success) {
+      const res = await updateOffer(offer.id, { is_featured: newFeatured } as any);
+      if (res.success) {
         toast.success(newFeatured ? 'Featured!' : 'Unfeatured');
-        fetchOffers();
+      } else {
+        toast.error(res.message || 'Failed to update featured status');
       }
     } catch (error) {
       console.error("Toggle featured error:", error);

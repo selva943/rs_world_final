@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import { Experience } from '@/types/app';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { SubscriptionModal } from '@/components/SubscriptionModal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,6 +46,7 @@ export function ExperienceDetail() {
   const { addToCart } = useCart();
   const { experiences, services, loading } = useData();
   const [experience, setExperience] = useState<Experience | any>(null);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [customization, setCustomization] = useState({
     message: '',
     recipientName: '',
@@ -58,6 +60,9 @@ export function ExperienceDetail() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [pincode, setPincode] = useState('');
+  const [slotAvailability, setSlotAvailability] = useState<{ count: number; max: number }>({ count: 0, max: 3 });
+  const [isCheckingSlot, setIsCheckingSlot] = useState(false);
   const [isOrdered, setIsOrdered] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,7 +143,57 @@ export function ExperienceDetail() {
     toast.info('Image removed');
   };
 
+  // 🧠 SMART LOGIC: Dynamic Pricing
+  const getDynamicPrice = () => {
+    let finalPrice = experience.price || 0;
+    if (experience.type !== 'service') return finalPrice;
+
+    const date = customization.scheduledDate ? new Date(customization.scheduledDate) : new Date();
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    const isSameDay = customization.scheduledDate === new Date().toISOString().split('T')[0];
+    
+    if (isWeekend) finalPrice *= (experience.weekend_multiplier || 1.1);
+    if (isSameDay) finalPrice *= (experience.same_day_multiplier || 1.15);
+    
+    // Peak hour check (e.g. 9-11 AM or 4-6 PM)
+    const slot = customization.selectedSlot;
+    if (slot === '9-11 AM' || slot === '4-6 PM') {
+      finalPrice *= (experience.peak_multiplier || 1.2);
+    }
+
+    return Math.round(finalPrice);
+  };
+
+  const currentPrice = getDynamicPrice();
+
+  // 🧠 SMART LOGIC: Slot Availability
+  const checkAvailability = async (date: string, slot: string) => {
+    if (!date || !slot || experience.type !== 'service') return;
+    setIsCheckingSlot(true);
+    try {
+      const { count } = await bookingsApi.checkSlotAvailability(experience.id, date, slot);
+      setSlotAvailability({ count, max: experience.max_bookings_per_slot || 3 });
+    } catch (err) {
+      console.error("Failed to check availability", err);
+    } finally {
+      setIsCheckingSlot(false);
+    }
+  };
+
+  useEffect(() => {
+    if (customization.scheduledDate && customization.selectedSlot) {
+      checkAvailability(customization.scheduledDate, customization.selectedSlot);
+    }
+  }, [customization.scheduledDate, customization.selectedSlot]);
+
   const handleReviewOrder = () => {
+    const isSubscription = experience.type?.toLowerCase() === 'subscription' || experience.is_subscription_available;
+    
+    if (isSubscription) {
+      setShowSubscriptionModal(true);
+      return;
+    }
+
     if (experience.type !== 'service') {
       addToCart(experience);
       navigate('/checkout');
@@ -149,6 +204,25 @@ export function ExperienceDetail() {
       toast.error("Please tell us your name for the booking");
       return;
     }
+
+    // 📍 SERVICE AREA VALIDATION
+    if (!pincode || pincode.length < 6) {
+      toast.error("Please enter a valid 6-digit pincode");
+      return;
+    }
+
+    if (experience.service_pincodes && experience.service_pincodes.length > 0) {
+      if (!experience.service_pincodes.includes(pincode)) {
+        toast.error(`Sorry, this service is not available in ${pincode} yet. Coming soon!`);
+        return;
+      }
+    }
+
+    if (slotAvailability.count >= slotAvailability.max) {
+      toast.error("This slot is fully booked. Please select another time or date.");
+      return;
+    }
+
     setShowSummary(true);
   };
 
@@ -166,12 +240,16 @@ export function ExperienceDetail() {
           booking_date: customization.scheduledDate || new Date().toISOString().split('T')[0],
           time_slot: customization.selectedSlot || 'To be confirmed',
           address: customization.specialInstructions || 'Direct Contact',
+          user_pincode: pincode,
+          total_price: currentPrice,
           status: 'pending' as const,
           notes: customization.giftMessage
         };
-        const newBooking = await bookingsApi.add(bookingPayload);
-        if (!newBooking) throw new Error('Failed to save booking');
-        bookingRef = newBooking.id.split('-')[0].toUpperCase();
+        const bookingResult = await bookingsApi.add(bookingPayload);
+        if (!bookingResult.success || !bookingResult.data) {
+          throw new Error(bookingResult.message || 'Failed to save booking');
+        }
+        bookingRef = bookingResult.data.id.split('-')[0].toUpperCase();
       } else {
         const orderData = {
           user_name: customization.recipientName,
@@ -189,9 +267,11 @@ export function ExperienceDetail() {
           status: 'pending' as any,
           priority: 'medium' as any,
         };
-        const newOrder = await ordersApi.add(orderData);
-        if (!newOrder) throw new Error('Failed to save order');
-        bookingRef = newOrder.id.split('-')[0].toUpperCase();
+        const orderResult = await ordersApi.add(orderData);
+        if (!orderResult || !orderResult.id) {
+          throw new Error('Failed to save order');
+        }
+        bookingRef = orderResult.id.split('-')[0].toUpperCase();
       }
 
       // Success State
@@ -209,12 +289,13 @@ export function ExperienceDetail() {
         message = `🛠️ NEW PALANI SERVICE BOOKING 🛠️
 
 👤 Name: ${customization.recipientName}
-📍 Address/Notes: ${customization.specialInstructions || 'Call for details'}
-📅 Preferred Date: ${customization.scheduledDate || 'ASAP'}
-⏰ Time Slot: ${customization.selectedSlot || 'To be confirmed'}
+📍 Address: ${customization.specialInstructions || 'Call for details'}
+📌 Pincode: ${pincode}
+📅 Date: ${customization.scheduledDate || 'ASAP'}
+⏰ Slot: ${customization.selectedSlot || 'To be confirmed'}
 
 📦 Service: ${experience.name}
-💰 Est. Price: ₹${experience.price}
+💰 Final Price: ₹${currentPrice} ${currentPrice > (experience.price || 0) ? '(Includes Peak/Weekend Factor)' : ''}
 ⏱️ Duration: ${experience.duration || 'N/A'}
 🔢 Ref: ${bookingRef}
 
@@ -249,6 +330,8 @@ The Boys from Your Next Door will be there soon! 🥦`;
       setIsSubmitting(false);
     }
   };
+
+  const isSubscription = experience?.type?.toLowerCase() === 'subscription' || experience?.is_subscription_available;
 
   if (isOrdered) {
     return (
@@ -535,9 +618,30 @@ The Boys from Your Next Door will be there soon! 🥦`;
                            <option value="11-1 PM">11–1 PM (Noon)</option>
                            <option value="2-4 PM">2–4 PM (Afternoon)</option>
                            <option value="4-6 PM">4–6 PM (Evening)</option>
-                        </select>
-                      </div>
-                    ) : (
+                         </select>
+                         
+                         {/* Slot Availability Indicator */}
+                         {customization.scheduledDate && customization.selectedSlot && (
+                           <div className="mt-2 flex items-center gap-2">
+                             {isCheckingSlot ? (
+                               <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+                             ) : (
+                               <>
+                                 <div className={cn(
+                                   "w-2 h-2 rounded-full",
+                                   slotAvailability.count >= slotAvailability.max ? "bg-rose-500" :
+                                   slotAvailability.count >= slotAvailability.max - 1 ? "bg-amber-500" : "bg-emerald-500"
+                                 )} />
+                                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                   {slotAvailability.count >= slotAvailability.max ? "Fully Booked" :
+                                    slotAvailability.count >= slotAvailability.max - 1 ? "Few Slots Left" : "Available"}
+                                 </span>
+                               </>
+                             )}
+                           </div>
+                         )}
+                       </div>
+                     ) : (
                       <div className="space-y-3">
                         {/* Empty spacer or additional product info */}
                          <div className="h-16 flex items-center justify-center text-[10px] text-slate-300 font-bold uppercase tracking-[0.2em] italic">
@@ -589,13 +693,36 @@ The Boys from Your Next Door will be there soon! 🥦`;
                     />
                   </div>
 
+                  {experience.type === 'service' && (
+                    <div className="space-y-3">
+                      <Label className="text-xs font-black uppercase tracking-[0.3em] text-pb-green-deep ml-1">Pincode</Label>
+                      <Input
+                        placeholder="e.g. 600001"
+                        maxLength={6}
+                        className="h-11 rounded-[10px] px-4 font-medium"
+                        value={pincode}
+                        onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
+                      />
+                      {experience.service_pincodes && experience.service_pincodes.length > 0 && (
+                        <p className="text-[9px] text-slate-400 font-medium ml-1">
+                          Available in selected areas of Chennai.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <Button
                     size="lg"
                     onClick={handleReviewOrder}
                     disabled={isSubmitting || isUploading}
                     className="w-full h-14"
                   >
-                    {experience.type === 'service' ? (
+                    {isSubscription ? (
+                      <>
+                        Subscribe Now
+                        <Sparkles className="w-6 h-6 ml-3 group-hover:scale-110 transition-transform" />
+                      </>
+                    ) : experience.type === 'service' ? (
                       <>
                         Confirm Booking
                         <ArrowRight className="w-6 h-6 ml-3 group-hover:translate-x-2 transition-transform" />
@@ -661,7 +788,15 @@ The Boys from Your Next Door will be there soon! 🥦`;
                         <img src={experience.image} className="w-20 h-20 rounded-lg object-cover shadow-sm" />
                         <div>
                             <h4 className="text-lg font-bold text-slate-900">{experience.name}</h4>
-                            <p className="text-pb-green-deep font-bold text-lg">₹{experience.price} <span className="text-xs font-medium text-slate-500">/ {experience.unit}</span></p>
+                            <p className="text-pb-green-deep font-bold text-lg">
+                              ₹{currentPrice} 
+                              {currentPrice > (experience.price || 0) && (
+                                <span className="text-[10px] text-amber-600 ml-2 font-black uppercase tracking-widest">
+                                  Includes Peak/Weekend Factor
+                                </span>
+                              )}
+                              <span className="text-xs font-medium text-slate-500 block">/ {experience.unit || (experience.type === 'service' ? 'Service' : 'Unit')}</span>
+                            </p>
                             <Badge className="mt-1 bg-pb-green-deep text-[#FFF59D] border-none capitalize">{safeString(mapCategory(experience)).replace(/_/g, ' ')}</Badge>
                         </div>
                     </div>
@@ -728,6 +863,15 @@ The Boys from Your Next Door will be there soon! 🥦`;
         </div>
       )}
       </AnimatePresence>
+
+      {/* Subscription Modal Render */}
+      {showSubscriptionModal && experience && (
+        <SubscriptionModal
+          product={experience}
+          isOpen={showSubscriptionModal}
+          onClose={() => setShowSubscriptionModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -25,6 +25,7 @@ import SubscriptionAdmin from './admin/SubscriptionAdmin';
 import { ServiceDashboard } from './admin/ServiceDashboard';
 import { ServiceManagement } from './admin/ServiceManagement';
 import { BookingManagement } from './admin/BookingManagement';
+import PromotionManagement from './admin/PromotionManagement';
 
 export function Admin() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -146,8 +147,8 @@ export function Admin() {
         return <OrderManagement />;
       case 'testimonials':
         return <TestimonialManagement />;
-      case 'offers':
-        return <OfferManagement />;
+      case 'promotions':
+        return <PromotionManagement />;
       case 'categories':
         return <CategoryManagement />;
       case 'recipes':
