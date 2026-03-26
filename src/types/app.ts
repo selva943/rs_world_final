@@ -88,6 +88,8 @@ export interface OrderItem {
   id: string;
   order_id: string;
   product_id: string;
+  name?: string; // Cache name at time of order
+  unit?: string; // Cache unit at time of order
   quantity: number;
   price: number;
   product?: Experience; // joined relation

@@ -65,6 +65,11 @@ export default function Checkout() {
     notes: '',
   });
 
+  // Force scroll to top on mount
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, []);
+
   const WHATSAPP_NUMBER = '917550346705';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,23 +141,27 @@ export default function Checkout() {
       setOrderId(savedOrder.id);
 
       // 4. WhatsApp Notification
+      const deliveryType = savedOrder?.delivery_type || form.delivery_type;
+      const deliveryFee = deliveryType === 'delivery' && Number(savedOrder?.total_amount || 0) < 500 ? 40 : 0;
+      const finalPayable = Number(savedOrder?.total_amount || 0) + deliveryFee;
+
       const waMessage = [
         `🛒 *${t('whatsapp_order_new_title')}*`,
         ``,
-        `🔖 *${t('whatsapp_order_id')}:* #${savedOrder.id.split('-')[0].toUpperCase()}`,
-        `👤 *${t('whatsapp_customer')}:* ${form.customer_name}`,
-        `📞 *${t('whatsapp_phone')}:* ${form.phone}`,
-        `🏠 *${t('whatsapp_type')}:* ${form.delivery_type.toUpperCase()}`,
-        form.delivery_type === 'delivery' ? `📍 *${t('whatsapp_address')}:* ${form.address}` : null,
+        `🔖 *${t('whatsapp_order_id')}:* #${savedOrder?.id?.split('-')[0].toUpperCase()}`,
+        `👤 *${t('whatsapp_customer')}:* ${savedOrder?.customer_name || form.customer_name}`,
+        `📞 *${t('whatsapp_phone')}:* ${savedOrder?.phone || form.phone}`,
+        `🏠 *${t('whatsapp_type')}:* ${deliveryType.toUpperCase()}`,
+        deliveryType === 'delivery' ? `📍 *${t('whatsapp_address')}:* ${savedOrder?.address || form.address}` : null,
         ``,
         `📋 *${t('whatsapp_items')}:*`,
         ...items.map(item => `• ${item.name} (${item.quantity} ${item.unit}) - ₹${item.price * item.quantity}`),
         ``,
-        discountTotal > 0 ? `🧧 *Discount Applied:* -₹${discountTotal}` : null,
-        bestOffer ? `✨ *Offer:* ${bestOffer.title}` : null,
-        appliedCoupon ? `🎫 *Coupon:* ${appliedCoupon.code}` : null,
-        `💰 *${t('whatsapp_grand_total')}: ₹${finalTotal}*`,
-        form.notes ? `📝 *${t('whatsapp_notes')}:* ${form.notes}` : null,
+        Number(savedOrder?.discount_amount || 0) > 0 ? `🧧 *Discount:* -₹${savedOrder?.discount_amount}` : null,
+        savedOrder?.coupon_id ? `🎫 *Coupon Applied*` : null,
+        deliveryFee > 0 ? `🚚 *Delivery Fee:* ₹${deliveryFee}` : `🚚 *Delivery:* FREE`,
+        `💰 *${t('whatsapp_grand_total')}: ₹${finalPayable}*`,
+        savedOrder?.notes || form.notes ? `📝 *${t('whatsapp_notes')}:* ${savedOrder?.notes || form.notes}` : null,
         ``,
         t('whatsapp_confirm_message')
       ].filter(Boolean).join('\n');
@@ -229,8 +238,8 @@ export default function Checkout() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-20 pt-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50/50 pb-32 pt-28 flex flex-col">
+      <div className="container mx-auto px-4 flex-1">
         <div className="flex items-center gap-4 mb-8">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-full">
             <ArrowLeft className="w-5 h-5" />
@@ -457,61 +466,61 @@ export default function Checkout() {
                 <p className="text-slate-400 text-sm mt-1">{t('items_count', { count: items.length })}</p>
               </div>
               
-              <CardContent className="p-0">
-                <div className="max-h-[300px] overflow-y-auto px-6 py-4 space-y-4">
-                  {items.map((item) => (
-                    <div key={item.product_id} className="flex gap-4">
-                      <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 relative group">
-                        <img 
-                          src={item.image} 
-                          alt={item.name} 
-                          className="w-full h-full object-cover transition-transform group-hover:scale-110" 
-                        />
-                        <div className="absolute top-0 right-0 p-1">
-                          <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 bg-white/90 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
-                            {item.quantity}
-                          </Badge>
+                <CardContent className="p-0">
+                  <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100 bg-white">
+                    {items.map((item) => (
+                      <div key={item.id} className="p-4 flex gap-4 items-center group hover:bg-slate-50 transition-colors">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 relative group">
+                          <img 
+                            src={item.image} 
+                            alt={item.name} 
+                            className="w-full h-full object-cover transition-transform group-hover:scale-110" 
+                          />
+                          <div className="absolute top-0 right-0 p-1">
+                            <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 bg-white/90 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
+                              {item.quantity}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <div className="flex justify-between items-start gap-2">
+                            <h4 className="font-semibold text-slate-800 text-sm line-clamp-1 leading-tight">{item.name}</h4>
+                            <button 
+                              type="button"
+                              onClick={() => removeFromCart(item.product_id)}
+                              className="text-slate-300 hover:text-red-500 transition-colors p-1 -m-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                            <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 border border-slate-100 shadow-sm">
+                              <Button 
+                                 type="button"
+                                 variant="ghost" 
+                                 size="icon" 
+                                 className="h-7 w-7 rounded-md hover:bg-slate-50 text-slate-500"
+                                 onClick={() => updateQuantity(item.product_id, Math.max(1, item.quantity - 1))}
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </Button>
+                              <span className="text-xs font-bold w-6 text-center text-slate-700">{item.quantity}</span>
+                              <Button 
+                                 type="button" 
+                                 variant="ghost" 
+                                 size="icon" 
+                                 className="h-7 w-7 rounded-md hover:bg-slate-50 text-slate-500"
+                                 onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                            <span className="font-black text-slate-900 text-sm tracking-tight">₹{item.price * item.quantity}</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <div className="flex justify-between items-start gap-2">
-                          <h4 className="font-semibold text-slate-800 text-sm line-clamp-1 leading-tight">{item.name}</h4>
-                          <button 
-                            type="button"
-                            onClick={() => removeFromCart(item.product_id)}
-                            className="text-slate-300 hover:text-red-500 transition-colors p-1 -m-1"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <div className="flex items-center justify-between mt-2">
-                           <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg p-0.5 border border-slate-100">
-                             <Button 
-                                type="button"
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 rounded-md hover:bg-white hover:shadow-sm"
-                                onClick={() => updateQuantity(item.product_id, Math.max(1, item.quantity - 1))}
-                             >
-                               <Minus className="w-3 h-3" />
-                             </Button>
-                             <span className="text-xs font-bold w-6 text-center">{item.quantity}</span>
-                             <Button 
-                                type="button"
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 rounded-md hover:bg-white hover:shadow-sm"
-                                onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
-                             >
-                               <Plus className="w-3 h-3" />
-                             </Button>
-                           </div>
-                           <span className="font-bold text-slate-900 text-sm">₹{item.price * item.quantity}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
                 <div className="p-6 bg-slate-50/50 border-t border-slate-100 space-y-6">
                   {/* Add More Products Button */}
@@ -628,16 +637,16 @@ export default function Checkout() {
                   </div>
                   
                   <div className="pt-4 border-t border-slate-200 flex justify-between items-end">
-                    <div>
-                      <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">{t('grand_total_label')}</div>
-                      <div className="text-3 shadow-primary/10">₹{finalTotal + (totalAmount >= 500 ? 0 : 40)}</div>
+                      <div>
+                        <div className="text-[10px] text-slate-400 uppercase font-black tracking-widest mb-1">{t('grand_total_label')}</div>
+                        <div className="text-3xl font-black text-pb-green-deep tracking-tighter">₹{finalTotal + (totalAmount >= 500 ? 0 : 40)}</div>
+                      </div>
+                      <div className="text-right">
+                         <Badge variant="outline" className="text-slate-400 font-bold border-slate-200 text-[10px] uppercase tracking-wider py-1 px-3 rounded-full">
+                           Incl. taxes
+                         </Badge>
+                      </div>
                     </div>
-                    <div className="text-right">
-                       <Badge variant="outline" className="text-slate-400 font-normal border-slate-200">
-                         Incl. all taxes
-                       </Badge>
-                    </div>
-                  </div>
 
                   <Button 
                     type="submit" 

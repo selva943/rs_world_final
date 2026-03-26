@@ -166,3 +166,39 @@ export async function submitOrder(
 
   return { success: true, order: savedOrder };
 }
+
+/**
+ * Cancel an order if it's in a valid stage (pending or confirmed).
+ */
+export async function cancelOrder(orderId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    // 1. Get current order status
+    const { data: order, error: fetchError } = await supabase
+      .from('orders')
+      .select('status')
+      .eq('id', orderId)
+      .single() as { data: { status: string } | null, error: any };
+
+    if (fetchError || !order) {
+      return { success: false, error: 'Order not found.' };
+    }
+
+    // 2. Validate status
+    const st = order.status.toLowerCase();
+    if (st !== 'pending' && st !== 'confirmed') {
+      return { success: false, error: `Order cannot be cancelled at the "${st}" stage.` };
+    }
+
+    // 3. Update status to cancelled
+    const success = await ordersApi.updateStatus(orderId, 'cancelled', 'Order cancelled by customer');
+    
+    if (!success) {
+      return { success: false, error: 'Failed to update order status.' };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('[orderService] Cancellation failed:', err);
+    return { success: false, error: err.message || 'An unexpected error occurred.' };
+  }
+}

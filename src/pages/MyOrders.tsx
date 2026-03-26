@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ordersApi, bookingsApi, subscriptionsApi } from '@/lib/services/api';
+import { cancelOrder } from '@/lib/services/orderService';
 import { Order, Booking, Subscription } from '@/types/app';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,9 +26,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router';
 import { cn } from '@/lib/utils';
 
-export function MyOrders() {
+const STATUS_MAP: Record<string, { label: string; color: string; step: number }> = {
+  'pending': { label: 'CREATED', color: 'bg-amber-50 text-amber-600 border-amber-100', step: 1 },
+  'confirmed': { label: 'CONFIRMED', color: 'bg-blue-50 text-blue-600 border-blue-100', step: 2 },
+  'packed': { label: 'PACKED', color: 'bg-indigo-50 text-indigo-600 border-indigo-100', step: 3 },
+  'out_for_delivery': { label: 'OUT FOR DELIVERY', color: 'bg-purple-50 text-purple-600 border-purple-100', step: 4 },
+  'delivered': { label: 'DELIVERED', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', step: 5 },
+  'cancelled': { label: 'CANCELLED', color: 'bg-rose-50 text-rose-600 border-rose-100', step: 0 },
+};
+
+export const MyOrders: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('products');
   const [loading, setLoading] = useState(true);
@@ -112,9 +123,9 @@ export function MyOrders() {
             <p className="text-slate-500 font-medium">Manage all your independent orders and requests</p>
           </div>
           <div className="flex items-center gap-3">
-             <Button 
-               variant="outline" 
-               onClick={fetchData} 
+             <Button
+               variant="outline"
+               onClick={fetchData}
                disabled={loading}
                size="md"
                className="w-11 h-11 p-0 rounded-xl"
@@ -123,8 +134,8 @@ export function MyOrders() {
              </Button>
              <div className="h-11 px-4 bg-white rounded-[10px] flex items-center gap-3 shadow-sm border border-slate-100">
                 <Search className="w-4 h-4 text-slate-300" />
-                <input 
-                  placeholder="Search orders..." 
+                <input
+                  placeholder="Search orders..."
                   className="bg-transparent border-none focus:outline-none text-sm font-medium text-slate-600 placeholder:text-slate-300 w-32 md:w-48"
                 />
              </div>
@@ -156,9 +167,9 @@ export function MyOrders() {
               >
                 {activeTab === 'products' && (
                   orders.length === 0 ? <EmptyState icon={<ShoppingBasket />} title="No Product Orders" /> :
-                  orders.map(order => <OrderCard key={order.id} order={order} />)
+                  orders.map(order => <OrderCard key={order.id} order={order} onUpdate={fetchData} />)
                 )}
-                
+
                 {activeTab === 'services' && (
                   bookings.length === 0 ? <EmptyState icon={<CalendarDays />} title="No Service Bookings" /> :
                   bookings.map(booking => <BookingCard key={booking.id} booking={booking} />)
@@ -177,7 +188,30 @@ export function MyOrders() {
   );
 }
 
-function OrderCard({ order }: { order: Order }) {
+function OrderCard({ order, onUpdate }: { order: Order; onUpdate: () => void }) {
+  const [isCancelling, setIsCancelling] = useState(false);
+  const navigate = useNavigate();
+  const statusInfo = STATUS_MAP[order.status.toLowerCase()] || STATUS_MAP.pending;
+  const canCancel = order.status.toLowerCase() === 'pending' || order.status.toLowerCase() === 'confirmed';
+
+  const handleCancel = async () => {
+    if (!window.confirm('Are you sure you want to cancel this order?')) return;
+    setIsCancelling(true);
+    try {
+      const res = await cancelOrder(order.id);
+      if (res.success) {
+        toast.success('Order cancelled successfully');
+        onUpdate();
+      } else {
+        toast.error(res.error || 'Failed to cancel order');
+      }
+    } catch (err) {
+      toast.error('An error occurred while cancelling the order');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   return (
     <Card className="bg-white border-slate-100 overflow-hidden rounded-2xl shadow-md hover:shadow-lg transition-all group border-2 hover:border-emerald-100">
       <CardContent className="p-0">
@@ -193,13 +227,42 @@ function OrderCard({ order }: { order: Order }) {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Badge className={cn("px-4 py-1.5 rounded-full font-black uppercase tracking-widest text-[9px] border", 
-                order.status === 'delivered' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100')}>
-                {order.status}
+              <Badge className={cn("px-4 py-1.5 rounded-full font-black uppercase tracking-widest text-[9px] border", statusInfo.color)}>
+                {statusInfo.label}
               </Badge>
               <p className="text-sm font-bold text-slate-400">{format(new Date(order.created_at), 'MMM dd, yyyy')}</p>
             </div>
           </div>
+
+          {/* Timeline UI */}
+          {order.status.toLowerCase() !== 'cancelled' && (
+            <div className="mb-8 px-2">
+              <div className="relative flex justify-between">
+                {/* Connector Line */}
+                <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-100 -translate-y-1/2 z-0" />
+                <div 
+                  className="absolute top-1/2 left-0 h-0.5 bg-pb-green-deep -translate-y-1/2 z-0 transition-all duration-500" 
+                  style={{ width: `${Math.max(0, (statusInfo.step - 1) * 25)}%` }}
+                />
+                
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <div key={s} className="relative z-10 flex flex-col items-center">
+                    <div className={cn(
+                      "w-4 h-4 rounded-full border-2 transition-all duration-300",
+                      statusInfo.step >= s ? "bg-pb-green-deep border-pb-green-deep scale-110" : "bg-white border-slate-200"
+                    )} />
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between mt-2">
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter w-12 text-center">Created</span>
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter w-12 text-center">Confirmed</span>
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter w-12 text-center">Packed</span>
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter w-12 text-center">Out</span>
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter w-12 text-center">Delivered</span>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-4">
             {order.items?.map((item, idx) => (
@@ -208,10 +271,10 @@ function OrderCard({ order }: { order: Order }) {
                    <div className="w-12 h-12 bg-slate-50 rounded-xl overflow-hidden border border-slate-100">
                      <img src={item.product?.image} className="w-full h-full object-cover" alt="" />
                    </div>
-                   <div>
-                     <p className="text-sm font-bold text-slate-800 line-clamp-1">{item.product?.name}</p>
-                     <p className="text-xs text-slate-400 font-medium">{item.quantity} {item.product?.unit || 'unit'} × ₹{item.price}</p>
-                   </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 line-clamp-1">{(item as any).name || item.product?.name || 'Item'}</p>
+                      <p className="text-xs text-slate-400 font-medium">{item.quantity} {(item as any).unit || item.product?.unit || 'unit'} × ₹{item.price}</p>
+                    </div>
                 </div>
                 <div className="h-8 w-8 rounded-lg bg-slate-50 flex items-center justify-center opacity-0 group-hover/item:opacity-100 transition-opacity">
                   <ChevronRight className="w-4 h-4 text-slate-300" />
@@ -225,7 +288,7 @@ function OrderCard({ order }: { order: Order }) {
               <div>
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">Payment</p>
                 <p className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className={cn("w-1.5 h-1.5 rounded-full", order.payment_status === 'paid' ? "bg-emerald-500" : "bg-amber-500")} />
                   {order.payment_method}
                 </p>
               </div>
@@ -245,10 +308,21 @@ function OrderCard({ order }: { order: Order }) {
             </div>
         </div>
         <div className="p-4 bg-white flex items-center justify-end gap-3 px-6">
+          {canCancel && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+              onClick={handleCancel}
+              disabled={isCancelling}
+            >
+              {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" className="text-slate-400 hover:text-slate-600">
             View Details
           </Button>
-          <Button size="sm" className="gap-2 px-6">
+          <Button size="sm" className="gap-2 px-6" onClick={() => navigate('/deliverables')}>
             <RefreshCw className="w-3.5 h-3.5" /> Reorder
           </Button>
         </div>

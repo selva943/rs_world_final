@@ -25,12 +25,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 const statusMap = {
-  'pending': { label: 'Pending', color: 'bg-amber-500/10 text-amber-600 border-amber-500/20', icon: MessageSquare },
-  'confirmed': { label: 'Confirmed', color: 'bg-blue-500/10 text-blue-600 border-blue-500/20', icon: CheckCircle2 },
-  'packed': { label: 'Packed', color: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20', icon: Package },
-  'out_for_delivery': { label: 'On Way', color: 'bg-purple-500/10 text-purple-600 border-purple-500/20', icon: Truck },
-  'delivered': { label: 'Delivered', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', icon: CheckCircle2 },
-  'cancelled': { label: 'Cancelled', color: 'bg-red-500/10 text-red-600 border-red-500/20', icon: XCircle },
+  pending: { label: 'CREATED', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
+  confirmed: { label: 'CONFIRMED', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: CheckCircle2 },
+  packed: { label: 'PACKED', color: 'bg-indigo-100 text-indigo-700 border-indigo-200', icon: Package },
+  out_for_delivery: { label: 'OUT FOR DELIVERY', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Truck },
+  delivered: { label: 'DELIVERED', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+  cancelled: { label: 'CANCELLED', color: 'bg-rose-100 text-rose-700 border-rose-200', icon: XCircle },
 };
 
 export const OrderManagement: React.FC = () => {
@@ -38,6 +38,7 @@ export const OrderManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const filteredOrders = orders.filter(o => {
     const name = safeString(o.customer_name).toLowerCase();
@@ -82,6 +83,39 @@ export const OrderManagement: React.FC = () => {
       } else {
         toast.error(res.message || "Failed to delete order");
       }
+    }
+  };
+
+  const handleStatusUpdate = async (newStatus: Order['status']) => {
+    if (!selectedOrder) return;
+
+    // Basic validation for status transitions
+    const currentStatus = selectedOrder.status;
+    const statusOrder = Object.keys(statusMap);
+    const currentIndex = statusOrder.indexOf(currentStatus);
+    const newIndex = statusOrder.indexOf(newStatus);
+
+    if (newIndex < currentIndex && newStatus !== 'cancelled') {
+      toast.error("Cannot revert to a previous status (unless cancelling).");
+      return;
+    }
+    if (currentStatus === 'delivered' || currentStatus === 'cancelled') {
+      toast.error("Cannot change status of a delivered or cancelled order.");
+      return;
+    }
+
+    try {
+      const success = await updateOrderStatus(selectedOrder.id, newStatus);
+      if (success) {
+        setSelectedOrder(prev => prev ? { ...prev, status: newStatus } : null);
+        toast.success(`Order status updated to ${newStatus.replace(/_/g, ' ').toUpperCase()}`);
+      } else {
+        toast.error("Failed to update order status");
+      }
+    } catch (error) {
+      toast.error("An error occurred while updating status.");
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -407,30 +441,25 @@ export const OrderManagement: React.FC = () => {
                 {/* Update Status Actions */}
                 <div className="pt-6 border-t border-slate-100">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Command Actions</label>
-                  <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-                    {Object.keys(statusMap).map((s) => (
-                      <button
-                        key={s}
-                        onClick={async () => {
-                           const success = await updateOrderStatus(selectedOrder.id, s as any);
-                           if (success) {
-                             // optimistic update in UI local state
-                             setSelectedOrder({ ...selectedOrder, status: s as any });
-                             toast.success("Order status updated");
-                           } else {
-                             toast.error("Failed to update status");
-                           }
-                        }}
-                        className={cn(
-                          "py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border",
-                          selectedOrder.status === s 
-                            ? "bg-pb-green-deep text-white border-pb-green-deep shadow-md" 
-                            : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50 hover:text-slate-600"
-                        )}
-                      >
-                        {s.replace(/_/g, ' ')}
-                      </button>
-                    ))}
+                  <div className="flex flex-wrap gap-3">
+                    <select 
+                      className="bg-white border border-slate-200 rounded-2xl px-6 py-3 text-[10px] font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-pb-green-deep/20 transition-all cursor-pointer hover:border-slate-300"
+                      value={selectedOrder.status}
+                      onChange={(e) => handleStatusUpdate(e.target.value as Order['status'])}
+                      disabled={updatingStatus || selectedOrder.status === 'delivered' || selectedOrder.status === 'cancelled'}
+                    >
+                      {Object.entries(statusMap).map(([value, info]) => (
+                        <option key={value} value={value} disabled={
+                          // Simple validation: can't change from final states
+                          (selectedOrder.status === 'delivered' || selectedOrder.status === 'cancelled') ||
+                          // Prevent going backwards in general (except to cancel)
+                          (Object.keys(statusMap).indexOf(value) < Object.keys(statusMap).indexOf(selectedOrder.status) && value !== 'cancelled')
+                        }>
+                          {info.label}
+                        </option>
+                      ))}
+                    </select>
+                    {updatingStatus && <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse self-center ml-2">Updating...</span>}
                   </div>
                 </div>
 
