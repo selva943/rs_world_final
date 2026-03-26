@@ -17,7 +17,9 @@ import {
   Activity,
   Wrench,
   BookOpen,
-  CalendarCheck
+  CalendarCheck,
+  Truck,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -40,6 +42,8 @@ const navItems = [
   { id: 'categories', label: 'Categories', icon: LayoutGrid },
   { id: 'recipes', label: 'Recipe Studio', icon: ChefHat },
   { id: 'orders', label: 'Orders', icon: ShoppingCart },
+  { id: 'delivery', label: 'Delivery Control', icon: Truck },
+  { id: 'subscription_mgmt', label: 'Subscriptions', icon: Users },
   { id: 'promotions', label: 'Promotions', icon: Tag },
   { id: 'uploads', label: 'Media Library', icon: ImageIcon },
   { id: 'testimonials', label: 'Fresh Reviews', icon: MessageSquare },

@@ -26,6 +26,8 @@ import { ServiceDashboard } from './admin/ServiceDashboard';
 import { ServiceManagement } from './admin/ServiceManagement';
 import { BookingManagement } from './admin/BookingManagement';
 import PromotionManagement from './admin/PromotionManagement';
+import { DeliveryControl } from './admin/DeliveryControl';
+import { SubscriptionManagement } from './admin/SubscriptionManagement';
 
 export function Admin() {
   const { user, loading: authLoading, signIn } = useAuth();
@@ -163,6 +165,10 @@ export function Admin() {
         return <BookingManagement />;
       case 'uploads':
         return <UploadManager />;
+      case 'delivery':
+        return <DeliveryControl />;
+      case 'subscription_mgmt':
+        return <SubscriptionManagement />;
       case 'settings':
         return (
           <div className="flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-100 max-w-4xl mx-auto">
